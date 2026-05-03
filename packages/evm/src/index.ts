@@ -1,2 +1,5 @@
 export { simulateEvmAction } from './simulate.js'
 export { getViemChain } from './chains.js'
+export { executeEvmAction } from './execute.js'
+export { privateKeySigner } from './signers.js'
+export { buildEvmTransaction } from './build.js'

@@ -2,6 +2,14 @@
 // policy check → EVM simulation via viem → human approval threshold check → execution (placeholder)
 // No real funds or private keys are required. The execution step returns execution_failed
 // because signing and broadcasting are not yet implemented.
+//
+// To run with real execution, pass a privateKeySigner and executeEvmAction to createAgent:
+//   import { privateKeySigner, executeEvmAction } from '@txfence/evm'
+//   const signer = privateKeySigner('0xYOUR_PRIVATE_KEY', 'ethereum')
+//   const agent = createAgent(config, adapters, rpcUrls,
+//     (action, chainId, rpcUrl, evaluation, simulation) =>
+//       executeEvmAction(action, chainId, rpcUrl, signer, evaluation, simulation)
+//   )
 
 import { createAgent } from '@txfence/core'
 import type { ChainAdapter } from '@txfence/core'
@@ -37,7 +45,14 @@ const swapAction = {
 }
 
 const agent = createAgent(
-  { chains: policy.chains, policies: policy, signer: { sign: async () => '', address: '' } },
+  {
+    chains: policy.chains,
+    policies: policy,
+    signer: {
+      address: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      sign: async (): Promise<`0x${string}`> => '0x',
+    },
+  },
   { ethereum: evmAdapter },
   { ethereum: 'https://ethereum.publicnode.com' },
 )

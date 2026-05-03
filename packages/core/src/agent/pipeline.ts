@@ -1,6 +1,7 @@
 import type { Action, BoundAction } from '../types/action.js'
 import type { Policy, ChainId, TokenAmount } from '../types/policy.js'
-import type { ExecutionResult } from '../types/receipt.js'
+import type { ExecutionResult, SuccessReceipt, PolicyEvaluation } from '../types/receipt.js'
+import type { SimulationResult } from '../types/simulation.js'
 import { evaluate } from '../engine/index.js'
 import type { AdapterMap } from './adapter.js'
 
@@ -9,6 +10,13 @@ export async function runPipeline(
   policy: Policy,
   adapters: AdapterMap,
   rpcUrls: Partial<Record<ChainId, string>>,
+  executor?: (
+    action: Action,
+    chainId: ChainId,
+    rpcUrl: string,
+    evaluation: PolicyEvaluation,
+    simulation: SimulationResult,
+  ) => Promise<SuccessReceipt>,
 ): Promise<ExecutionResult> {
   // Step 1
   const boundAction: BoundAction = { action, policy }
@@ -20,6 +28,8 @@ export async function runPipeline(
   }
 
   // Step 3
+  let simulationResult: SimulationResult | undefined = undefined
+
   if (policy.requireSimulation) {
     const adapter = adapters[action.chain]
     const rpcUrl = rpcUrls[action.chain]
@@ -40,7 +50,7 @@ export async function runPipeline(
       throw new Error(`no rpcUrl configured for chain: ${action.chain}`)
     }
 
-    const simulationResult = await adapter.simulate(action, action.chain, rpcUrl)
+    simulationResult = await adapter.simulate(action, action.chain, rpcUrl)
 
     if (!simulationResult.success) {
       return { status: 'simulation_failed', action, simulation: simulationResult }
@@ -68,6 +78,31 @@ export async function runPipeline(
   }
 
   // Step 5
+  if (executor !== undefined) {
+    const rpcUrl = rpcUrls[action.chain]
+    if (rpcUrl === undefined) throw new Error(`no rpcUrl configured for chain: ${action.chain}`)
+    try {
+      const receipt = await executor(
+        action,
+        action.chain,
+        rpcUrl,
+        evaluation,
+        simulationResult ?? {
+          success: true,
+          chain: action.chain,
+          simulatedAtBlock: 0,
+          gasEstimate: 0n,
+          gasBufferApplied: 1,
+          coverageLevel: 'none',
+          caveats: [],
+        },
+      )
+      return { status: 'success', receipt }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      return { status: 'execution_failed', action, txHash: '', reason }
+    }
+  }
   return {
     status: 'execution_failed',
     action,

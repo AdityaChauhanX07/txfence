@@ -2,7 +2,7 @@ export type { ChainId, TokenAmount, ContractEntry, Policy, CapLockMode } from '.
 export type { Action, SwapAction, TransferAction, ContractCallAction, BoundAction } from './types/action.js'
 export type { SimulationResult, SimulationCoverageLevel, SimulationCaveat } from './types/simulation.js'
 export type { ExecutionResult, SuccessReceipt, PolicyEvaluation, PolicyRejectionReason } from './types/receipt.js'
-export type { Agent, AgentConfig, Signer } from './types/agent.js'
+export type { Agent, AgentConfig, Signer, SerializedTransaction } from './types/agent.js'
 export { evaluate } from './engine/index.js'
 export type { CheckResult } from './engine/index.js'
 export { createAgent, runPipeline } from './agent/index.js'

@@ -7,6 +7,7 @@ export type SwapAction = {
   to: string
   via: string
   maxSlippage: number
+  calldata?: `0x${string}`
 }
 
 export type TransferAction = {
@@ -14,6 +15,7 @@ export type TransferAction = {
   chain: ChainId
   token: TokenAmount
   to: string
+  calldata?: `0x${string}`
 }
 
 export type ContractCallAction = {
@@ -23,6 +25,7 @@ export type ContractCallAction = {
   method: string
   args: unknown[]
   value?: TokenAmount
+  calldata?: `0x${string}`
 }
 
 export type Action =

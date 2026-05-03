@@ -1,4 +1,4 @@
-import type { Policy } from './policy.js'
+import type { Policy, ChainId } from './policy.js'
 import type { Action, BoundAction } from './action.js'
 import type { ExecutionResult } from './receipt.js'
 
@@ -9,13 +9,17 @@ export type AgentConfig = {
 }
 
 export type Signer = {
-  sign: (tx: SerializedTransaction) => Promise<string>
-  address: string
+  address: `0x${string}`
+  sign: (tx: SerializedTransaction) => Promise<`0x${string}`>
 }
 
 export type SerializedTransaction = {
-  chain: string
-  data: string
+  chain: ChainId
+  to: string
+  value: bigint
+  data: `0x${string}`
+  gas: bigint
+  chainId: number
 }
 
 export type Agent = {
