@@ -1,3 +1,8 @@
 export { simulateSolanaAction } from './simulate.js'
 export { isSolanaChain } from './constants.js'
 export type { SolanaChainId } from './constants.js'
+export { executeSolanaAction } from './execute.js'
+export { privateKeySolanaSignerFromBytes } from './signers.js'
+export { buildSolanaTransaction } from './build.js'
+export type { SolanaSerializedTransaction } from './build.js'
+export type { SolanaSigner } from './signers.js'
