@@ -5,3 +5,5 @@ export type { ExecutionResult, SuccessReceipt, PolicyEvaluation, PolicyRejection
 export type { Agent, AgentConfig, Signer } from './types/agent.js'
 export { evaluate } from './engine/index.js'
 export type { CheckResult } from './engine/index.js'
+export { createAgent, runPipeline } from './agent/index.js'
+export type { ChainAdapter, AdapterMap } from './agent/index.js'
