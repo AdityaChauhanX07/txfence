@@ -3,3 +3,5 @@ export type { Action, SwapAction, TransferAction, ContractCallAction, BoundActio
 export type { SimulationResult, SimulationCoverageLevel, SimulationCaveat } from './types/simulation.js'
 export type { ExecutionResult, SuccessReceipt, PolicyEvaluation, PolicyRejectionReason } from './types/receipt.js'
 export type { Agent, AgentConfig, Signer } from './types/agent.js'
+export { evaluate } from './engine/index.js'
+export type { CheckResult } from './engine/index.js'
