@@ -1,3 +1,5 @@
+import type { CapConfig } from '../caps/provider.js'
+
 export type ChainId =
   | 'ethereum'
   | 'arbitrum'
@@ -30,4 +32,5 @@ export type Policy = {
   humanApprovalThreshold: TokenAmount
   humanApprovalTimeoutMs: number
   capLockMode: CapLockMode
+  capLocks?: CapConfig[]
 }

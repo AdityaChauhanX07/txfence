@@ -7,3 +7,11 @@ export { evaluate } from './engine/index.js'
 export type { CheckResult } from './engine/index.js'
 export { createAgent, runPipeline } from './agent/index.js'
 export type { ChainAdapter, AdapterMap } from './agent/index.js'
+export { createMemoryCapLockProvider } from './caps/index.js'
+export type {
+  CapLockProvider,
+  CapLockResult,
+  CapConfig,
+  RollingWindowConfig,
+  AbsoluteCapConfig,
+} from './caps/index.js'

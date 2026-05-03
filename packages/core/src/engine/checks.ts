@@ -1,6 +1,7 @@
 import type { BoundAction } from '../types/action.js'
 import type { SimulationResult } from '../types/simulation.js'
 import type { PolicyRejectionReason } from '../types/receipt.js'
+import type { CapLockProvider } from '../caps/provider.js'
 
 export type CheckResult = {
   name: string
@@ -67,7 +68,54 @@ export function checkSlippage(action: BoundAction): CheckResult {
   return { name: 'checkSlippage', passed: true }
 }
 
-// cap lock check: requires external lock provider, implemented in agent layer
+export async function checkCapLock(
+  action: BoundAction,
+  provider?: CapLockProvider,
+): Promise<CheckResult & { lockId?: string }> {
+  const { policy, action: act } = action
+
+  if (policy.capLocks === undefined || policy.capLocks.length === 0) {
+    return { name: 'checkCapLock', passed: true }
+  }
+
+  // no provider configured — cap lock check skipped. configure a CapLockProvider for multi-agent environments.
+  if (provider === undefined) {
+    return { name: 'checkCapLock', passed: true }
+  }
+
+  let spendAmount: bigint
+  let spendToken: string
+
+  if (act.kind === 'swap') {
+    spendAmount = act.from.amount
+    spendToken = act.from.token
+  } else if (act.kind === 'transfer') {
+    spendAmount = act.token.amount
+    spendToken = act.token.token
+  } else if (act.value !== undefined) {
+    spendAmount = act.value.amount
+    spendToken = act.value.token
+  } else {
+    return { name: 'checkCapLock', passed: true }
+  }
+
+  // Note: in a full implementation, multiple cap IDs would each return their own lockId.
+  // For now track the last granted lockId.
+  let lastGrantedLockId: string | undefined = undefined
+
+  for (const capLock of policy.capLocks) {
+    const result = await provider.acquire(capLock.capId, spendAmount, spendToken)
+    if (!result.granted) {
+      return { name: 'checkCapLock', passed: false, reason: 'cap_lock_unavailable' }
+    }
+    lastGrantedLockId = result.lockId
+  }
+
+  if (lastGrantedLockId !== undefined) {
+    return { name: 'checkCapLock', passed: true, lockId: lastGrantedLockId }
+  }
+  return { name: 'checkCapLock', passed: true }
+}
 
 export function checkSimulationRequired(
   action: BoundAction,

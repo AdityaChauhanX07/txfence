@@ -2,8 +2,17 @@ import type { Action, BoundAction } from '../types/action.js'
 import type { Policy, ChainId, TokenAmount } from '../types/policy.js'
 import type { ExecutionResult, SuccessReceipt, PolicyEvaluation } from '../types/receipt.js'
 import type { SimulationResult } from '../types/simulation.js'
+import type { CapLockProvider } from '../caps/provider.js'
 import { evaluate } from '../engine/index.js'
+import { checkCapLock } from '../engine/checks.js'
 import type { AdapterMap } from './adapter.js'
+
+function getSpendAmount(action: Action): bigint {
+  if (action.kind === 'swap') return action.from.amount
+  if (action.kind === 'transfer') return action.token.amount
+  if (action.kind === 'contract_call' && action.value !== undefined) return action.value.amount
+  return 0n
+}
 
 export async function runPipeline(
   action: Action,
@@ -17,6 +26,7 @@ export async function runPipeline(
     evaluation: PolicyEvaluation,
     simulation: SimulationResult,
   ) => Promise<SuccessReceipt>,
+  capLockProvider?: CapLockProvider,
 ): Promise<ExecutionResult> {
   // Step 1
   const boundAction: BoundAction = { action, policy }
@@ -62,6 +72,24 @@ export async function runPipeline(
     }
   }
 
+  // Step 3.5 — cap lock
+  let capLockId: string | undefined = undefined
+  if (capLockProvider !== undefined) {
+    const capLockResult = await checkCapLock(boundAction, capLockProvider)
+    if (!capLockResult.passed) {
+      return {
+        status: 'policy_rejected',
+        action,
+        evaluation: {
+          passed: false,
+          checksRun: ['checkCapLock'],
+          rejectionReason: 'cap_lock_unavailable',
+        },
+      }
+    }
+    capLockId = capLockResult.lockId
+  }
+
   // Step 4
   let spend: TokenAmount | undefined
   if (action.kind === 'swap') {
@@ -81,6 +109,7 @@ export async function runPipeline(
   if (executor !== undefined) {
     const rpcUrl = rpcUrls[action.chain]
     if (rpcUrl === undefined) throw new Error(`no rpcUrl configured for chain: ${action.chain}`)
+    const spendAmount = getSpendAmount(action)
     try {
       const receipt = await executor(
         action,
@@ -97,8 +126,18 @@ export async function runPipeline(
           caveats: [],
         },
       )
+      if (capLockId !== undefined && policy.capLocks !== undefined && capLockProvider !== undefined) {
+        for (const capLock of policy.capLocks) {
+          await capLockProvider.commit(capLock.capId, capLockId, spendAmount)
+        }
+      }
       return { status: 'success', receipt }
     } catch (err) {
+      if (capLockId !== undefined && policy.capLocks !== undefined && capLockProvider !== undefined) {
+        for (const capLock of policy.capLocks) {
+          await capLockProvider.release(capLock.capId, capLockId, spendAmount)
+        }
+      }
       const reason = err instanceof Error ? err.message : String(err)
       return { status: 'execution_failed', action, txHash: '', reason }
     }

@@ -4,6 +4,7 @@ import type { ChainId } from '../types/policy.js'
 import type { PolicyEvaluation, SuccessReceipt } from '../types/receipt.js'
 import type { SimulationResult } from '../types/simulation.js'
 import type { AdapterMap } from './adapter.js'
+import type { CapLockProvider } from '../caps/provider.js'
 import { runPipeline } from './pipeline.js'
 
 export function createAgent(
@@ -17,10 +18,18 @@ export function createAgent(
     evaluation: PolicyEvaluation,
     simulation: SimulationResult,
   ) => Promise<SuccessReceipt>,
+  capLockProvider?: CapLockProvider,
 ): Agent {
   return {
     config,
     submit: (boundAction: BoundAction) =>
-      runPipeline(boundAction.action, boundAction.policy, adapters, rpcUrls, executor),
+      runPipeline(
+        boundAction.action,
+        boundAction.policy,
+        adapters,
+        rpcUrls,
+        executor,
+        capLockProvider,
+      ),
   }
 }
