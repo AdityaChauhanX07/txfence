@@ -11,6 +11,8 @@ export type PolicyRejectionReason =
   | 'contract_entry_expired'
   | 'chain_id_mismatch'
   | 'simulation_required_but_failed'
+  | 'gas_buffer_insufficient'
+  | 'slippage_not_declared'
 
 export type PolicyEvaluation = {
   passed: boolean

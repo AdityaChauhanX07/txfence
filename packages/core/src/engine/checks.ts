@@ -61,8 +61,10 @@ export function checkSlippage(action: BoundAction): CheckResult {
     return { name: 'checkSlippage', passed: true }
   }
 
-  const passed = action.action.maxSlippage > 0
-  return { name: 'checkSlippage', passed }
+  if (action.action.maxSlippage <= 0) {
+    return { name: 'checkSlippage', passed: false, reason: 'slippage_not_declared' }
+  }
+  return { name: 'checkSlippage', passed: true }
 }
 
 // cap lock check: requires external lock provider, implemented in agent layer
@@ -98,6 +100,8 @@ export function checkGasBuffer(
     return { name: 'checkGasBuffer', passed: true }
   }
 
-  const passed = simulationResult.gasBufferApplied >= action.policy.gasBufferMultiplier
-  return { name: 'checkGasBuffer', passed }
+  if (simulationResult.gasBufferApplied < action.policy.gasBufferMultiplier) {
+    return { name: 'checkGasBuffer', passed: false, reason: 'gas_buffer_insufficient' }
+  }
+  return { name: 'checkGasBuffer', passed: true }
 }
