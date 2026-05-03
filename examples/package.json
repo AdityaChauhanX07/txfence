@@ -1,0 +1,16 @@
+{
+  "name": "@txfence/examples",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "evm-swap": "npx tsx evm-swap.ts"
+  },
+  "dependencies": {
+    "@txfence/core": "workspace:*",
+    "@txfence/evm": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}

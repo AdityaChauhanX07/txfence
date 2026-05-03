@@ -21,11 +21,9 @@ export async function simulateEvmAction(
     let gasEstimate: bigint
 
     if (action.kind === 'swap') {
-      gasEstimate = await client.estimateGas({
-        account: PLACEHOLDER_FROM,
-        to: action.via as `0x${string}`,
-        value: 0n,
-      })
+      // DEX routers revert on any call without valid swap calldata, so estimateGas
+      // is not meaningful here. Use a conservative upper bound for a typical DEX swap.
+      gasEstimate = 200_000n
     } else if (action.kind === 'transfer') {
       gasEstimate = await client.estimateGas({
         account: PLACEHOLDER_FROM,

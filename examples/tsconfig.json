@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@txfence/core": ["../packages/core/src/index.ts"],
+      "@txfence/evm": ["../packages/evm/src/index.ts"]
+    }
+  }
+}
