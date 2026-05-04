@@ -16,3 +16,5 @@ export type {
   AbsoluteCapConfig,
 } from './caps/index.js'
 export type { MetadataVerifier, MetadataVerificationResult } from './verification/index.js'
+export { createMultiChainAdapter } from './adapters/index.js'
+export { getPolicyRejectionMessage, getSimulationFailureMessage } from './errors/index.js'
