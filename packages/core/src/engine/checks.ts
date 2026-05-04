@@ -2,6 +2,7 @@ import type { BoundAction } from '../types/action.js'
 import type { SimulationResult } from '../types/simulation.js'
 import type { PolicyRejectionReason } from '../types/receipt.js'
 import type { CapLockProvider } from '../caps/provider.js'
+import type { MetadataVerifier } from '../verification/provider.js'
 
 export type CheckResult = {
   name: string
@@ -33,9 +34,50 @@ export function checkContract(action: BoundAction): CheckResult {
     return { name: 'checkContract', passed: false, reason: 'contract_not_allowed' }
   }
 
-  // metadata verification: requires chain call, implemented in adapter layer
-
   return { name: 'checkContract', passed: true }
+}
+
+export async function checkMetadata(
+  action: BoundAction,
+  verifier?: MetadataVerifier,
+): Promise<CheckResult> {
+  const { action: act, policy } = action
+
+  if (act.kind === 'transfer') {
+    return { name: 'checkMetadata', passed: true }
+  }
+
+  const contractAddress = act.kind === 'swap' ? act.via : act.contract
+  const chain = act.chain
+
+  const entry = policy.allowedContracts.find(
+    e => e.address === contractAddress && e.chain === chain,
+  )
+
+  if (entry === undefined) {
+    return { name: 'checkMetadata', passed: true }
+  }
+
+  if (entry.expiresAt !== undefined && entry.expiresAt < Date.now()) {
+    return { name: 'checkMetadata', passed: false, reason: 'contract_entry_expired' }
+  }
+
+  // no verifier configured — bytecode and owner checks skipped
+  if (verifier === undefined) {
+    return { name: 'checkMetadata', passed: true }
+  }
+
+  // no metadata pinned on this entry — nothing to verify
+  if (entry.bytecodeHash === undefined && entry.ownerAddress === undefined) {
+    return { name: 'checkMetadata', passed: true }
+  }
+
+  const result = await verifier.verifyContract(entry)
+  if (!result.verified) {
+    return { name: 'checkMetadata', passed: false, reason: result.reason }
+  }
+
+  return { name: 'checkMetadata', passed: true }
 }
 
 export function checkSpend(action: BoundAction): CheckResult {

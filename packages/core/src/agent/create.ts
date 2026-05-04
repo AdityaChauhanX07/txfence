@@ -5,6 +5,7 @@ import type { PolicyEvaluation, SuccessReceipt } from '../types/receipt.js'
 import type { SimulationResult } from '../types/simulation.js'
 import type { AdapterMap } from './adapter.js'
 import type { CapLockProvider } from '../caps/provider.js'
+import type { MetadataVerifier } from '../verification/provider.js'
 import { runPipeline } from './pipeline.js'
 
 export function createAgent(
@@ -19,6 +20,7 @@ export function createAgent(
     simulation: SimulationResult,
   ) => Promise<SuccessReceipt>,
   capLockProvider?: CapLockProvider,
+  metadataVerifier?: MetadataVerifier,
 ): Agent {
   return {
     config,
@@ -30,6 +32,7 @@ export function createAgent(
         rpcUrls,
         executor,
         capLockProvider,
+        metadataVerifier,
       ),
   }
 }

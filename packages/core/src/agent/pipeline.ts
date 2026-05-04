@@ -3,8 +3,9 @@ import type { Policy, ChainId, TokenAmount } from '../types/policy.js'
 import type { ExecutionResult, SuccessReceipt, PolicyEvaluation } from '../types/receipt.js'
 import type { SimulationResult } from '../types/simulation.js'
 import type { CapLockProvider } from '../caps/provider.js'
+import type { MetadataVerifier } from '../verification/provider.js'
 import { evaluate } from '../engine/index.js'
-import { checkCapLock } from '../engine/checks.js'
+import { checkCapLock, checkMetadata } from '../engine/checks.js'
 import type { AdapterMap } from './adapter.js'
 
 function getSpendAmount(action: Action): bigint {
@@ -27,6 +28,7 @@ export async function runPipeline(
     simulation: SimulationResult,
   ) => Promise<SuccessReceipt>,
   capLockProvider?: CapLockProvider,
+  metadataVerifier?: MetadataVerifier,
 ): Promise<ExecutionResult> {
   // Step 1
   const boundAction: BoundAction = { action, policy }
@@ -35,6 +37,22 @@ export async function runPipeline(
   let evaluation = evaluate(boundAction)
   if (!evaluation.passed && evaluation.rejectionReason !== 'simulation_required_but_failed') {
     return { status: 'policy_rejected', action, evaluation }
+  }
+
+  // Step 2.5 — metadata verification
+  if (metadataVerifier !== undefined) {
+    const metadataResult = await checkMetadata(boundAction, metadataVerifier)
+    if (!metadataResult.passed) {
+      return {
+        status: 'policy_rejected',
+        action,
+        evaluation: {
+          passed: false,
+          checksRun: ['checkMetadata'],
+          ...(metadataResult.reason !== undefined ? { rejectionReason: metadataResult.reason } : {}),
+        },
+      }
+    }
   }
 
   // Step 3
