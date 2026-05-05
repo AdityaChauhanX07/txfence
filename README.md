@@ -1,5 +1,7 @@
 # txfence
 
+![CI](https://github.com/AdityaChauhanX07/txfence/actions/workflows/ci.yml/badge.svg)
+
 The fence between what an agent wants to do and what it does on-chain.
 
 txfence is a typed, composable policy-and-execution SDK for autonomous agents operating across EVM and Solana. It provides simulation-before-execution, declarative spending policies, and human-in-the-loop hooks as first-class primitives.
