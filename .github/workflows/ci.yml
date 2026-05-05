@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build all packages
+        run: pnpm build
+
       - name: Type check all packages
         run: |
           pnpm --filter @txfence/core exec tsc --noEmit
@@ -39,15 +42,13 @@ jobs:
           pnpm --filter @txfence/cli exec tsc --noEmit
           pnpm --filter @txfence/react exec tsc --noEmit
 
-      - name: Build all packages
-        run: pnpm build
-
       - name: Run tests
-        run: pnpm --filter @txfence/core test
-          && pnpm --filter @txfence/solana test
-          && pnpm --filter @txfence/mcp test
-          && pnpm --filter @txfence/cli test
-          && pnpm --filter @txfence/react test
+        run: |
+          pnpm --filter @txfence/core test
+          pnpm --filter @txfence/solana test
+          pnpm --filter @txfence/mcp test
+          pnpm --filter @txfence/cli test
+          pnpm --filter @txfence/react test
 
   build-check:
     name: Build check
