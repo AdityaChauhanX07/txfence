@@ -4,6 +4,18 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.11.1
+
+Expanded integration test suite.
+
+- Expanded packages/integration from 5 to 12 tests
+- Added 7 pure policy pipeline tests that run without Anvil in any environment: slippage not declared, contract not on allowlist, spend exceeds cap, gas buffer below minimum, expired contract entry, approval timeout with no provider, approval rejected via memory provider
+- Added 2 new Anvil tests: cap lock blocks second concurrent transfer, approval approved proceeds to execution
+- Tests split into two describe blocks: pure policy tests always run, Anvil tests skip when ANVIL_URL is not set
+- All 12 tests pass against a real Anvil mainnet fork
+
+---
+
 ## v0.11.0
 
 Cosmos chain adapter.
