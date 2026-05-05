@@ -1,5 +1,5 @@
 export type { ChainId, TokenAmount, ContractEntry, Policy, CapLockMode } from './types/policy.js'
-export type { Action, SwapAction, TransferAction, ContractCallAction, BoundAction } from './types/action.js'
+export type { Action, SwapAction, TransferAction, ContractCallAction, BoundAction, SolanaAccountMeta } from './types/action.js'
 export type { SimulationResult, SimulationCoverageLevel, SimulationCaveat } from './types/simulation.js'
 export type { ExecutionResult, SuccessReceipt, PolicyEvaluation, PolicyRejectionReason } from './types/receipt.js'
 export type { Agent, AgentConfig, Signer, SerializedTransaction } from './types/agent.js'

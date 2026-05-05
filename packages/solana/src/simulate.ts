@@ -35,8 +35,8 @@ export async function simulateSolanaAction(
       // placeholder: real fee estimation requires a fully compiled transaction message
       gasEstimate = await rpc.getMinimumBalanceForRentExemption(0n).send()
     } else {
-      // real compute unit estimation requires a signed transaction and will be implemented
-      // with proper CU simulation in a future iteration
+      // pre-built transaction provided — using placeholder fee estimate.
+      // real fee estimation requires deserializing the transaction message.
       gasEstimate = await rpc.getMinimumBalanceForRentExemption(0n).send()
     }
 

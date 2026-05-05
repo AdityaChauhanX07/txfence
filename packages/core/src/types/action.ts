@@ -1,5 +1,10 @@
 import type { ChainId, TokenAmount, Policy } from './policy.js'
 
+export type SolanaAccountMeta = {
+  address: string
+  role: 'writable_signer' | 'readonly_signer' | 'writable' | 'readonly'
+}
+
 export type SwapAction = {
   kind: 'swap'
   chain: ChainId
@@ -7,7 +12,8 @@ export type SwapAction = {
   to: string
   via: string
   maxSlippage: number
-  calldata?: `0x${string}`
+  calldata?: `0x${string}`           // EVM: pre-encoded calldata
+  solanaTransaction?: Uint8Array     // Solana: pre-built serialized transaction bytes
 }
 
 export type TransferAction = {
@@ -25,7 +31,10 @@ export type ContractCallAction = {
   method: string
   args: unknown[]
   value?: TokenAmount
-  calldata?: `0x${string}`
+  calldata?: `0x${string}`                  // EVM: pre-encoded calldata
+  solanaAccounts?: SolanaAccountMeta[]      // Solana: account metas for the instruction
+  solanaData?: Uint8Array                   // Solana: pre-encoded instruction data
+  solanaTransaction?: Uint8Array            // Solana: pre-built full serialized transaction (overrides accounts+data)
 }
 
 export type Action =

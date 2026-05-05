@@ -12,7 +12,7 @@ import {
   getU32Codec,
   getU64Codec,
 } from '@solana/kit'
-import type { Action, ChainId } from '@txfence/core'
+import type { Action, ChainId, SolanaAccountMeta } from '@txfence/core'
 import { isSolanaChain } from './constants.js'
 
 // System Program address on all Solana clusters
@@ -22,6 +22,15 @@ export type SolanaSerializedTransaction = {
   chain: ChainId
   serializedMessage: Uint8Array
   signers: string[]
+}
+
+function mapAccountRole(role: SolanaAccountMeta['role']): AccountRole {
+  switch (role) {
+    case 'writable_signer': return AccountRole.WRITABLE_SIGNER
+    case 'readonly_signer': return AccountRole.READONLY_SIGNER
+    case 'writable': return AccountRole.WRITABLE
+    case 'readonly': return AccountRole.READONLY
+  }
 }
 
 export async function buildSolanaTransaction(
@@ -34,9 +43,53 @@ export async function buildSolanaTransaction(
     throw new Error(`chain not supported by Solana adapter: ${chainId}`)
   }
 
-  if (action.kind === 'swap' || action.kind === 'contract_call') {
+  if (action.kind === 'swap') {
+    if (action.solanaTransaction !== undefined) {
+      // pre-built transaction from builder (e.g. from Jupiter API)
+      return { chain: chainId, serializedMessage: action.solanaTransaction, signers: [fromAddress] }
+    }
     throw new Error(
-      'solana swap and contract call execution not yet implemented — use TransferAction for SOL transfers',
+      'SwapAction on Solana requires solanaTransaction — build the transaction using Jupiter or another aggregator and pass the serialized bytes',
+    )
+  }
+
+  if (action.kind === 'contract_call') {
+    if (action.solanaTransaction !== undefined) {
+      // pre-built transaction — builder handles full instruction encoding
+      return { chain: chainId, serializedMessage: action.solanaTransaction, signers: [fromAddress] }
+    }
+
+    if (action.solanaData !== undefined && action.solanaAccounts !== undefined) {
+      // builder-provided instruction data and accounts
+      const rpc = createSolanaRpc(rpcUrl)
+      const { value: { blockhash, lastValidBlockHeight } } = await rpc.getLatestBlockhash().send()
+      const fromAddr = address(fromAddress)
+      const programAddr = address(action.contract)
+
+      const instruction = {
+        programAddress: programAddr,
+        accounts: action.solanaAccounts.map(a => ({
+          address: address(a.address),
+          role: mapAccountRole(a.role),
+        })),
+        data: action.solanaData,
+      }
+
+      const message = pipe(
+        createTransactionMessage({ version: 0 }),
+        m => setTransactionMessageFeePayer(fromAddr, m),
+        m => setTransactionMessageLifetimeUsingBlockhash({ blockhash, lastValidBlockHeight }, m),
+        m => appendTransactionMessageInstruction(instruction, m),
+      )
+
+      const compiled = compileTransactionMessage(message)
+      const encoder = getCompiledTransactionMessageEncoder()
+      const serializedMessage = new Uint8Array(encoder.encode(compiled))
+      return { chain: chainId, serializedMessage, signers: [fromAddress] }
+    }
+
+    throw new Error(
+      'ContractCallAction on Solana requires either solanaTransaction or both solanaData and solanaAccounts',
     )
   }
 

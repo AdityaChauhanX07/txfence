@@ -3,6 +3,10 @@ import { broadcastAndConfirmSolana } from './broadcast.js'
 import type { SolanaSigner } from './signers.js'
 import type { Action, PolicyEvaluation, SimulationResult, SuccessReceipt, ChainId } from '@txfence/core'
 
+// Handles all three action kinds via buildSolanaTransaction:
+//   TransferAction       — builds a System Program transfer instruction
+//   SwapAction           — requires pre-built solanaTransaction bytes (e.g. from Jupiter)
+//   ContractCallAction   — requires solanaTransaction, or solanaData+solanaAccounts
 export async function executeSolanaAction(
   action: Action,
   chainId: ChainId,
