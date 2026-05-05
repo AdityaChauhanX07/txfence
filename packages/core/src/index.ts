@@ -20,3 +20,8 @@ export { createMultiChainAdapter } from './adapters/index.js'
 export { getPolicyRejectionMessage, getSimulationFailureMessage } from './errors/index.js'
 export { createMemoryReceiptStore, createFileReceiptStore } from './storage/index.js'
 export type { ReceiptStore, ReceiptFilter } from './storage/index.js'
+export { createMemoryApprovalProvider, createWebhookApprovalProvider } from './approval/index.js'
+export type {
+  ApprovalProvider, ApprovalRequest, ApprovalDecision,
+  PolicyContext, MemoryApprovalProvider, WebhookApprovalOptions,
+} from './approval/index.js'

@@ -7,6 +7,7 @@ import type { AdapterMap } from './adapter.js'
 import type { CapLockProvider } from '../caps/provider.js'
 import type { MetadataVerifier } from '../verification/provider.js'
 import type { ReceiptStore } from '../storage/store.js'
+import type { ApprovalProvider } from '../approval/types.js'
 import { runPipeline } from './pipeline.js'
 
 export function createAgent(
@@ -22,6 +23,7 @@ export function createAgent(
   ) => Promise<SuccessReceipt>,
   capLockProvider?: CapLockProvider,
   metadataVerifier?: MetadataVerifier,
+  approvalProvider?: ApprovalProvider,
   receiptStore?: ReceiptStore,
 ): Agent {
   return {
@@ -35,6 +37,7 @@ export function createAgent(
         executor,
         capLockProvider,
         metadataVerifier,
+        approvalProvider,
         receiptStore,
       ),
   }

@@ -1,10 +1,12 @@
 import type { Action, BoundAction } from '../types/action.js'
-import type { Policy, ChainId, TokenAmount } from '../types/policy.js'
+import type { Policy, ChainId } from '../types/policy.js'
 import type { ExecutionResult, SuccessReceipt, PolicyEvaluation } from '../types/receipt.js'
 import type { SimulationResult } from '../types/simulation.js'
 import type { CapLockProvider } from '../caps/provider.js'
 import type { MetadataVerifier } from '../verification/provider.js'
 import type { ReceiptStore } from '../storage/store.js'
+import type { ApprovalProvider, ApprovalRequest, ApprovalDecision } from '../approval/types.js'
+import { randomUUID } from 'node:crypto'
 import { evaluate } from '../engine/index.js'
 import { checkCapLock, checkMetadata } from '../engine/checks.js'
 import type { AdapterMap } from './adapter.js'
@@ -30,6 +32,7 @@ export async function runPipeline(
   ) => Promise<SuccessReceipt>,
   capLockProvider?: CapLockProvider,
   metadataVerifier?: MetadataVerifier,
+  approvalProvider?: ApprovalProvider,
   receiptStore?: ReceiptStore,
 ): Promise<ExecutionResult> {
   // Step 1
@@ -110,26 +113,78 @@ export async function runPipeline(
     capLockId = capLockResult.lockId
   }
 
-  // Step 4
-  let spend: TokenAmount | undefined
-  if (action.kind === 'swap') {
-    spend = action.from
-  } else if (action.kind === 'transfer') {
-    spend = action.token
-  } else if (action.kind === 'contract_call' && action.value !== undefined) {
-    spend = action.value
-  }
+  // Step 4 — human approval
+  const spendAmount = getSpendAmount(action)
+  const threshold = policy.humanApprovalThreshold
 
-  if (spend !== undefined && spend.amount > policy.humanApprovalThreshold.amount) {
-    // human approval hook: in a full implementation this would pause and wait for external approval. returning approval_timeout as a placeholder until the approval system is implemented.
-    return { status: 'approval_timeout', action: boundAction }
+  if (spendAmount > threshold.amount) {
+    if (approvalProvider === undefined) {
+      return { status: 'approval_timeout', action: boundAction }
+    }
+
+    const token = randomUUID()
+    const now = Date.now()
+    const expiresAt = now + policy.humanApprovalTimeoutMs
+
+    const approvalReq: ApprovalRequest = {
+      token,
+      action,
+      simulation: simulationResult !== undefined ? {
+        gasEstimate: simulationResult.gasEstimate.toString(),
+        coverageLevel: simulationResult.coverageLevel,
+        caveats: simulationResult.caveats,
+      } : {
+        gasEstimate: '0',
+        coverageLevel: 'none',
+        caveats: [],
+      },
+      policyContext: {
+        maxSpendPerTx: {
+          token: policy.maxSpendPerTx.token,
+          amount: policy.maxSpendPerTx.amount.toString(),
+        },
+        humanApprovalThreshold: {
+          token: policy.humanApprovalThreshold.token,
+          amount: policy.humanApprovalThreshold.amount.toString(),
+        },
+      },
+      requestedAt: new Date(now).toISOString(),
+      expiresAt: new Date(expiresAt).toISOString(),
+      approveUrl: '',
+      rejectUrl: '',
+    }
+
+    await approvalProvider.request(approvalReq)
+
+    let decision: ApprovalDecision | null = null
+    let timedOut = false
+    const pollIntervalMs = 50
+
+    const pollLoop = async (): Promise<void> => {
+      while (!timedOut) {
+        decision = await approvalProvider.poll(token)
+        if (decision !== null) return
+        await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs))
+      }
+    }
+
+    const timeoutPromise = new Promise<void>(resolve =>
+      setTimeout(() => { timedOut = true; resolve() }, policy.humanApprovalTimeoutMs)
+    )
+
+    await Promise.race([pollLoop(), timeoutPromise])
+    timedOut = true
+
+    if (decision === null || decision === 'rejected') {
+      return { status: 'approval_timeout', action: boundAction }
+    }
+    // decision === 'approved' — fall through to execution
   }
 
   // Step 5
   if (executor !== undefined) {
     const rpcUrl = rpcUrls[action.chain]
     if (rpcUrl === undefined) throw new Error(`no rpcUrl configured for chain: ${action.chain}`)
-    const spendAmount = getSpendAmount(action)
     try {
       const receipt = await executor(
         action,
