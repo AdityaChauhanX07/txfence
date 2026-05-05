@@ -60,7 +60,7 @@ export default defineConfig({
   },
 
   // signer: required for live execution (dryRun: false)
-  // never hardcode private keys — use environment variables
+  // never hardcode private keys -- use environment variables
   // signer: privateKeySigner(env('AGENT_PRIVATE_KEY') as \`0x\${string}\`),
 })
 `
