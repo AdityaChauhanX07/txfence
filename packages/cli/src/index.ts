@@ -5,6 +5,7 @@ import { makeSimulateCommand } from './commands/simulate.js'
 import { makeCheckPolicyCommand } from './commands/check-policy.js'
 import { makeSubmitCommand } from './commands/submit.js'
 import { makeReceiptCommand } from './commands/receipt.js'
+import { makeInitCommand } from './commands/init.js'
 
 const program = new Command()
   .name('txfence')
@@ -15,5 +16,6 @@ program.addCommand(makeSimulateCommand())
 program.addCommand(makeCheckPolicyCommand())
 program.addCommand(makeSubmitCommand())
 program.addCommand(makeReceiptCommand())
+program.addCommand(makeInitCommand())
 
 program.parse(process.argv)
