@@ -51,12 +51,14 @@ const baseContractCall: ContractCallAction = {
 
 const passingSim: SimulationResult = {
   success: true,
+  wouldRevert: false,
   chain: 'ethereum',
   simulatedAtBlock: 1000,
   gasEstimate: 100000n,
   gasBufferApplied: 1.3,
-  coverageLevel: 'partial',
+  coverageLevel: 'basic',
   caveats: ['state_may_diverge'],
+  provider: 'eth_call',
 }
 
 function bound(

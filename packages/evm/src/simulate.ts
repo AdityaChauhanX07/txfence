@@ -1,8 +1,13 @@
-import { createPublicClient, http, encodeFunctionData } from 'viem'
-import type { SimulationResult, SimulationCaveat, Action, ChainId } from '@txfence/core'
+import { createPublicClient, http } from 'viem'
+import type { SimulationResult, SimulationCaveat, SimulateOptions, Action, ChainId } from '@txfence/core'
 import { getViemChain } from './chains.js'
+import { simulateWithTenderly } from './tenderly.js'
 
-// encodeFunctionData reserved for ABI-based calldata encoding when ABI is available
+export type TenderlyConfig = {
+  accountSlug: string
+  projectSlug: string
+  accessKey: string
+}
 
 const PLACEHOLDER_FROM = '0x0000000000000000000000000000000000000001' as `0x${string}`
 const DEFAULT_GAS_BUFFER = 1.2
@@ -11,7 +16,13 @@ export async function simulateEvmAction(
   action: Action,
   chainId: ChainId,
   rpcUrl: string,
+  options?: SimulateOptions,
+  tenderlyConfig?: TenderlyConfig,
 ): Promise<SimulationResult> {
+  if (tenderlyConfig !== undefined) {
+    return simulateWithTenderly(action, chainId, tenderlyConfig, options)
+  }
+
   // throws 'chain not supported by EVM adapter: <id>' for non-EVM chains
   const chain = getViemChain(chainId)
 
@@ -47,22 +58,26 @@ export async function simulateEvmAction(
 
     return {
       success: true,
+      wouldRevert: false,
       chain: chainId,
       simulatedAtBlock: Number(blockNumber),
       gasEstimate,
       gasBufferApplied: DEFAULT_GAS_BUFFER,
-      coverageLevel: 'partial',
+      coverageLevel: 'basic',
       caveats,
+      provider: 'eth_call',
     }
   } catch {
     return {
       success: false,
+      wouldRevert: false,
       chain: chainId,
       simulatedAtBlock: 0,
       gasEstimate: 0n,
       gasBufferApplied: 0,
       coverageLevel: 'none',
       caveats: ['state_may_diverge'],
+      provider: 'eth_call',
     }
   }
 }

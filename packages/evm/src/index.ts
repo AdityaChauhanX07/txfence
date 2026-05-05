@@ -1,4 +1,6 @@
 export { simulateEvmAction } from './simulate.js'
+export type { TenderlyConfig } from './simulate.js'
+export { simulateWithTenderly } from './tenderly.js'
 export { getViemChain } from './chains.js'
 export { executeEvmAction } from './execute.js'
 export { privateKeySigner } from './signers.js'

@@ -99,12 +99,14 @@ describe('getPolicyRejectionMessage', () => {
 describe('getSimulationFailureMessage', () => {
   const sim: SimulationResult = {
     success: false,
+    wouldRevert: false,
     chain: 'ethereum',
     simulatedAtBlock: 1234,
     gasEstimate: 0n,
     gasBufferApplied: 1,
     coverageLevel: 'partial',
     caveats: ['state_may_diverge'],
+    provider: 'eth_call',
   }
 
   it('returns a message including the chain, block, coverage level, and caveats', () => {

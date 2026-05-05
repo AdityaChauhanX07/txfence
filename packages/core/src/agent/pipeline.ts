@@ -193,12 +193,14 @@ export async function runPipeline(
         evaluation,
         simulationResult ?? {
           success: true,
+          wouldRevert: false,
           chain: action.chain,
           simulatedAtBlock: 0,
           gasEstimate: 0n,
           gasBufferApplied: 1,
           coverageLevel: 'none',
           caveats: [],
+          provider: 'eth_call',
         },
       )
       if (capLockId !== undefined && policy.capLocks !== undefined && capLockProvider !== undefined) {

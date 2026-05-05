@@ -3,7 +3,7 @@
 // Real CU simulation will be added once the signing layer is implemented in the agent layer.
 
 import { createSolanaRpc, address, lamports } from '@solana/kit'
-import type { SimulationResult, SimulationCaveat, Action, ChainId } from '@txfence/core'
+import type { SimulationResult, SimulationCaveat, SimulateOptions, Action, ChainId } from '@txfence/core'
 import { isSolanaChain } from './constants.js'
 
 // address reserved for future use when constructing transaction messages in simulation
@@ -21,6 +21,7 @@ export async function simulateSolanaAction(
   action: Action,
   chainId: ChainId,
   rpcUrl: string,
+  _options?: SimulateOptions,
 ): Promise<SimulationResult> {
   if (!isSolanaChain(chainId)) {
     throw new Error('chain not supported by Solana adapter')
@@ -44,22 +45,26 @@ export async function simulateSolanaAction(
 
     return {
       success: true,
+      wouldRevert: false,
       chain: chainId,
       simulatedAtBlock: Number(slot),
       gasEstimate,
       gasBufferApplied: DEFAULT_CU_BUFFER,
       coverageLevel: 'partial',
       caveats: [...SOLANA_CAVEATS],
+      provider: 'eth_call',
     }
   } catch {
     return {
       success: false,
+      wouldRevert: false,
       chain: chainId,
       simulatedAtBlock: 0,
       gasEstimate: lamports(0n),
       gasBufferApplied: 0,
       coverageLevel: 'none',
       caveats: [...SOLANA_CAVEATS],
+      provider: 'eth_call',
     }
   }
 }
