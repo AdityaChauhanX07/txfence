@@ -4,6 +4,34 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.10.0
+
+Tenderly simulation integration and SimulationResult type upgrades.
+
+**SimulationResult type changes**
+- Added `wouldRevert: boolean` field — distinguishes simulation infrastructure failure from on-chain revert
+- Added `revertReason?: string` field — revert message when wouldRevert is true
+- Added `provider: 'eth_call' | 'tenderly'` field — explicit simulation method tracking
+- Added `trace?: TenderlyTrace` field — full execution trace when provider is tenderly
+- Renamed coverage levels: eth_call simulation now reports `'basic'` instead of `'partial'`; Tenderly reports `'deep'`
+- Added `SimulateOptions` type with `stateOverrides` for hypothetical state simulation
+- Added `SimulationProvider` and `TenderlyTrace` types
+
+**Tenderly integration in @txfence/evm**
+- Added `TenderlyConfig` type with `accessKey`, `accountSlug`, `projectSlug`
+- Added `simulateWithTenderly(action, chainId, rpcUrl, config, options?)` — calls Tenderly Simulation API
+- `simulateEvmAction` now accepts optional `tenderlyConfig` — routes to Tenderly when configured, falls back to eth_call
+- Tenderly simulation returns `coverageLevel: 'deep'` and full call trace
+- `proxy_implementation_unverified` caveat is not added for Tenderly simulations — Tenderly traces through proxies
+- `state_may_diverge` caveat always present — honest about execution time uncertainty
+- State overrides supported via `options.stateOverrides` — maps address to balance/nonce overrides
+- 7 new tests covering success, revert detection, network failure, URL construction, and state overrides
+
+**ChainAdapter interface change**
+- `simulate` method now accepts optional fourth parameter `options?: SimulateOptions`
+
+---
+
 ## v0.9.0
 
 Hardened for production and webhook-based human approval system.
