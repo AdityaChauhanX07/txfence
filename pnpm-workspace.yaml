@@ -3,4 +3,5 @@ packages:
   - "packages/integration"
   - "packages/mcp"
   - "packages/cli"
+  - "packages/react"
   - "examples"
