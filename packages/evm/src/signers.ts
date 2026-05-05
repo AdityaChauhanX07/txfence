@@ -3,10 +3,10 @@
 
 import { createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import type { SerializedTransaction, Signer, ChainId } from '@txfence/core'
+import type { SerializedTransaction, Signer } from '@txfence/core'
 import { getViemChain } from './chains.js'
 
-export function privateKeySigner(privateKey: `0x${string}`, _chainId: ChainId): Signer {
+export function privateKeySigner(privateKey: `0x${string}`): Signer {
   const account = privateKeyToAccount(privateKey)
   return {
     address: account.address,
@@ -15,7 +15,7 @@ export function privateKeySigner(privateKey: `0x${string}`, _chainId: ChainId): 
       const client = createWalletClient({
         account,
         chain,
-        transport: http(),
+        transport: http(tx.rpcUrl),
       })
       const request = await client.prepareTransactionRequest({
         to: tx.to as `0x${string}`,

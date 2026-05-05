@@ -1,0 +1,17 @@
+{
+  "name": "@txfence/integration",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@txfence/core": "workspace:*",
+    "@txfence/evm": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.5"
+  }
+}

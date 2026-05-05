@@ -5,7 +5,7 @@ import { getViemChain } from './chains.js'
 export async function buildEvmTransaction(
   action: Action,
   chainId: ChainId,
-  _rpcUrl: string,
+  rpcUrl: string,
   gasEstimate: bigint,
   gasBufferMultiplier: number,
   _fromAddress: `0x${string}`,
@@ -31,5 +31,5 @@ export async function buildEvmTransaction(
     data = action.calldata ?? '0x'
   }
 
-  return { chain: chainId, to, value, data, gas, chainId: chain.id }
+  return { chain: chainId, to, value, data, gas, chainId: chain.id, rpcUrl }
 }

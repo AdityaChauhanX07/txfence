@@ -20,6 +20,7 @@ export type SerializedTransaction = {
   data: `0x${string}`
   gas: bigint
   chainId: number
+  rpcUrl: string
 }
 
 export type Agent = {

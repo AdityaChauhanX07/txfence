@@ -5,7 +5,7 @@
 //
 // To run with real execution, pass a privateKeySigner and executeEvmAction to createAgent:
 //   import { privateKeySigner, executeEvmAction } from '@txfence/evm'
-//   const signer = privateKeySigner('0xYOUR_PRIVATE_KEY', 'ethereum')
+//   const signer = privateKeySigner('0xYOUR_PRIVATE_KEY')
 //   const agent = createAgent(config, adapters, rpcUrls,
 //     (action, chainId, rpcUrl, evaluation, simulation) =>
 //       executeEvmAction(action, chainId, rpcUrl, signer, evaluation, simulation)
