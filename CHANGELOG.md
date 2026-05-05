@@ -4,6 +4,23 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.10.1
+
+PostgreSQL receipt storage backend.
+
+- Added `@txfence/storage-pg` package
+- `createPgReceiptStore(pool, options?)` — implements the `ReceiptStore` interface backed by PostgreSQL
+- `initSchema(pool, options?)` — idempotent schema creation, run once on startup
+- Accepts injected `pg.Pool` — txfence does not manage the connection lifecycle
+- `tableName` option defaults to `txfence_receipts`, fully configurable
+- Indexes on `chain` and `confirmed_at_block` for efficient filtering
+- `ON CONFLICT DO UPDATE` on save — idempotent upserts
+- Full bigint serialization round-trip via string conversion for JSONB storage
+- 12 tests using a mock Pool — no real database required in CI
+- Peer dependency on `pg ^8.11.0`
+
+---
+
 ## v0.10.0
 
 Tenderly simulation integration and SimulationResult type upgrades.
