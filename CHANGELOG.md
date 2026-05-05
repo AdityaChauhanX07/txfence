@@ -4,6 +4,24 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.11.0
+
+Cosmos chain adapter.
+
+- Added `@txfence/cosmos` package with support for `cosmoshub` and `osmosis`
+- Added `'cosmoshub'` and `'osmosis'` to the `ChainId` union in `@txfence/core`
+- Added `cosmosTransaction?: Uint8Array` field to `TransferAction`, `SwapAction`, and `ContractCallAction` — builder provides pre-built Protobuf-encoded transaction bytes
+- `simulateCosmosAction` — connects via `StargateClient`, fetches current block height, returns conservative 80000 gas placeholder for MsgSend (full simulate endpoint requires signed transaction with sequence number)
+- `buildCosmosTransaction` — passes through `cosmosTransaction` bytes for all action kinds; native MsgSend building deferred until cosmjs-types integration
+- `createCosmosSignerFromMnemonic` — creates a signer from a BIP39 mnemonic using `DirectSecp256k1HdWallet` from `@cosmjs/proto-signing`
+- `broadcastAndConfirmCosmos` — broadcasts raw transaction bytes via `StargateClient.broadcastTx` and assembles `SuccessReceipt`
+- `executeCosmosAction` — composes build, sign, and broadcast into a single call
+- Chain configs for `cosmoshub` (cosmoshub-4, uatom) and `osmosis` (osmosis-1, uosmo) with gas prices
+- 10 tests covering all action kinds, pre-built byte passthrough, and chain validation
+- Same pattern as `@txfence/evm` and `@txfence/solana` — consistent adapter architecture
+
+---
+
 ## v0.10.1
 
 PostgreSQL receipt storage backend.
