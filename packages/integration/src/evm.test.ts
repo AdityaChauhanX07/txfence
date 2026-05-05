@@ -47,7 +47,7 @@ describe('EVM integration — simulation', () => {
     expect(result.success).toBe(true)
     expect(result.chain).toBe('ethereum')
     expect(result.gasEstimate).toBeGreaterThan(0n)
-    expect(result.coverageLevel).toBe('partial')
+    expect(result.coverageLevel).toBe('basic')
     expect(result.caveats).toContain('state_may_diverge')
   }, 30000)
 })

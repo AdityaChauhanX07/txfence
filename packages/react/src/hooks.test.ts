@@ -5,12 +5,14 @@ import type { SimulationResult, Policy, TransferAction } from '@txfence/core'
 
 const passingSim: SimulationResult = {
   success: true,
+  wouldRevert: false,
   chain: 'ethereum',
   simulatedAtBlock: 1000,
   gasEstimate: 21000n,
   gasBufferApplied: 1.2,
   coverageLevel: 'partial',
   caveats: ['state_may_diverge'],
+  provider: 'eth_call',
 }
 
 const basePolicy: Policy = {
