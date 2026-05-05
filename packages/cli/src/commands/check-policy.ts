@@ -2,7 +2,7 @@ import { Command } from 'commander'
 import { resolve } from 'path'
 import { addActionOptions, buildActionFromOptions } from '../action-options.js'
 import { formatPolicyEvaluation } from '../format.js'
-import { loadConfig } from '@txfence/mcp/src/config.js'
+import { loadConfig } from '@txfence/mcp'
 import { evaluate } from '@txfence/core'
 
 export function makeCheckPolicyCommand(): Command {

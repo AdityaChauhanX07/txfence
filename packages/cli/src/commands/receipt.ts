@@ -2,7 +2,7 @@ import { Command } from 'commander'
 import { resolve } from 'path'
 import { createPublicClient, http } from 'viem'
 import { getViemChain } from '@txfence/evm'
-import { loadConfig } from '@txfence/mcp/src/config.js'
+import { loadConfig } from '@txfence/mcp'
 import type { ChainId } from '@txfence/core'
 
 export function makeReceiptCommand(): Command {

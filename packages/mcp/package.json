@@ -13,7 +13,7 @@
   },
   "files": ["dist", "README.md", "LICENSE"],
   "bin": {
-    "txfence-mcp": "./dist/index.js"
+    "txfence-mcp": "./dist/bin.js"
   },
   "scripts": {
     "build": "tsup",
