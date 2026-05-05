@@ -2,8 +2,19 @@
   "name": "@txfence/solana",
   "version": "0.0.1",
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "pnpm run build",
+    "clean": "rm -rf dist",
     "test": "vitest run",
     "test:watch": "vitest"
   },

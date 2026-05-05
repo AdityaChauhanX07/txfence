@@ -3,10 +3,22 @@
   "version": "0.0.1",
   "type": "module",
   "private": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
   "bin": {
-    "txfence": "./src/index.ts"
+    "txfence": "./dist/index.js"
   },
   "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "pnpm run build",
+    "clean": "rm -rf dist",
     "start": "tsx src/index.ts",
     "test": "vitest run"
   },
