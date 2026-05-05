@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check all packages
+        run: |
+          pnpm --filter @txfence/core exec tsc --noEmit
+          pnpm --filter @txfence/evm exec tsc --noEmit
+          pnpm --filter @txfence/solana exec tsc --noEmit
+          pnpm --filter @txfence/redis exec tsc --noEmit
+          pnpm --filter @txfence/mcp exec tsc --noEmit
+          pnpm --filter @txfence/cli exec tsc --noEmit
+          pnpm --filter @txfence/react exec tsc --noEmit
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm --filter @txfence/core test
+          && pnpm --filter @txfence/solana test
+          && pnpm --filter @txfence/mcp test
+          && pnpm --filter @txfence/cli test
+          && pnpm --filter @txfence/react test
+
+  build-check:
+    name: Build check
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and verify exports
+        run: |
+          pnpm build
+          node --input-type=module << 'EOF'
+          import { createAgent, evaluate, createMemoryReceiptStore } from './packages/core/dist/index.js'
+          if (typeof createAgent !== 'function') throw new Error('createAgent not exported')
+          if (typeof evaluate !== 'function') throw new Error('evaluate not exported')
+          if (typeof createMemoryReceiptStore !== 'function') throw new Error('createMemoryReceiptStore not exported')
+          console.log('all exports verified')
+          EOF
