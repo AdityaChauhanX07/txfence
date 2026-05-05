@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'url'
 import type { Policy, ChainId, AdapterMap, CapLockProvider, MetadataVerifier, Signer } from '@txfence/core'
 
 export type TxfenceConfig = {
@@ -16,7 +17,8 @@ export function defineConfig(config: TxfenceConfig): TxfenceConfig {
 
 export async function loadConfig(configPath: string): Promise<TxfenceConfig> {
   try {
-    const mod = await import(configPath) as { default: TxfenceConfig }
+    const fileUrl = pathToFileURL(configPath).href
+    const mod = await import(fileUrl) as { default: TxfenceConfig }
     return mod.default
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
