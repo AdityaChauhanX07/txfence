@@ -1,0 +1,25 @@
+{
+  "name": "@txfence/mcp",
+  "version": "0.0.1",
+  "type": "module",
+  "private": false,
+  "bin": {
+    "txfence-mcp": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@txfence/core": "workspace:*",
+    "@txfence/evm": "workspace:*",
+    "tsx": "^4.21.0",
+    "viem": "^2.48.8",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "vitest": "^4.1.5"
+  }
+}
