@@ -4,6 +4,31 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.9.0
+
+Hardened for production and webhook-based human approval system.
+
+**Production hardening**
+- Added tsup build pipeline — all 7 publishable packages compile to dist/ with declaration files and source maps
+- Added GitHub Actions CI — type check, build, and test on every push to main
+- Added CONTRIBUTING.md with setup instructions, development workflow, and design principles
+- Added CHANGELOG.md
+- Fixed @txfence/mcp architecture — separated bin.ts (CLI entry) from index.ts (library barrel) so importing from @txfence/mcp does not start the server
+- Fixed deep import issue — config utilities exported from @txfence/mcp public surface
+
+**Webhook approval system**
+- Added ApprovalProvider interface with request() and poll() methods
+- Added createWebhookApprovalProvider(webhookUrl, pollUrl, options?) — dispatches approval requests via HTTP POST with HMAC-SHA256 signature in X-TXFence-Signature header; polls for decisions
+- Added createMemoryApprovalProvider() — in-memory implementation for testing with decide() and pending() helpers
+- Added PolicyContext type — compact policy summary included in webhook payloads (no full policy leakage)
+- Webhook payload includes approveUrl and rejectUrl for one-click email approval
+- Poll endpoint accepts GET with decision query param for email link handling
+- Pipeline polls with 50ms interval, stops cleanly on timeout with cancelled flag to prevent race conditions
+- approvalProvider is an optional parameter on createAgent and runPipeline
+- 10 new tests covering both the memory provider and pipeline integration
+
+---
+
 ## v0.8.0
 
 Pluggable receipt storage.
