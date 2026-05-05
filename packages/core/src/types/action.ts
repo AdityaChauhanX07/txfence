@@ -14,6 +14,7 @@ export type SwapAction = {
   maxSlippage: number
   calldata?: `0x${string}`           // EVM: pre-encoded calldata
   solanaTransaction?: Uint8Array     // Solana: pre-built serialized transaction bytes
+  cosmosTransaction?: Uint8Array     // Cosmos: pre-built serialized transaction bytes
 }
 
 export type TransferAction = {
@@ -22,6 +23,8 @@ export type TransferAction = {
   token: TokenAmount
   to: string
   calldata?: `0x${string}`
+  solanaTransaction?: Uint8Array
+  cosmosTransaction?: Uint8Array   // pre-built for non-MsgSend Cosmos transfers
 }
 
 export type ContractCallAction = {
@@ -35,6 +38,7 @@ export type ContractCallAction = {
   solanaAccounts?: SolanaAccountMeta[]      // Solana: account metas for the instruction
   solanaData?: Uint8Array                   // Solana: pre-encoded instruction data
   solanaTransaction?: Uint8Array            // Solana: pre-built full serialized transaction (overrides accounts+data)
+  cosmosTransaction?: Uint8Array            // Cosmos: pre-built serialized transaction bytes
 }
 
 export type Action =

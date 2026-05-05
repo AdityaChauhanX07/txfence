@@ -6,6 +6,8 @@ export type ChainId =
   | 'optimism'
   | 'base'
   | 'solana'
+  | 'cosmoshub'
+  | 'osmosis'
 
 export type TokenAmount = {
   token: string
