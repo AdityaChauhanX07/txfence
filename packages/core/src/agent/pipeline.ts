@@ -4,6 +4,7 @@ import type { ExecutionResult, SuccessReceipt, PolicyEvaluation } from '../types
 import type { SimulationResult } from '../types/simulation.js'
 import type { CapLockProvider } from '../caps/provider.js'
 import type { MetadataVerifier } from '../verification/provider.js'
+import type { ReceiptStore } from '../storage/store.js'
 import { evaluate } from '../engine/index.js'
 import { checkCapLock, checkMetadata } from '../engine/checks.js'
 import type { AdapterMap } from './adapter.js'
@@ -29,6 +30,7 @@ export async function runPipeline(
   ) => Promise<SuccessReceipt>,
   capLockProvider?: CapLockProvider,
   metadataVerifier?: MetadataVerifier,
+  receiptStore?: ReceiptStore,
 ): Promise<ExecutionResult> {
   // Step 1
   const boundAction: BoundAction = { action, policy }
@@ -148,6 +150,9 @@ export async function runPipeline(
         for (const capLock of policy.capLocks) {
           await capLockProvider.commit(capLock.capId, capLockId, spendAmount)
         }
+      }
+      if (receiptStore !== undefined) {
+        await receiptStore.save(receipt)
       }
       return { status: 'success', receipt }
     } catch (err) {

@@ -18,3 +18,5 @@ export type {
 export type { MetadataVerifier, MetadataVerificationResult } from './verification/index.js'
 export { createMultiChainAdapter } from './adapters/index.js'
 export { getPolicyRejectionMessage, getSimulationFailureMessage } from './errors/index.js'
+export { createMemoryReceiptStore, createFileReceiptStore } from './storage/index.js'
+export type { ReceiptStore, ReceiptFilter } from './storage/index.js'
