@@ -4,7 +4,7 @@
 
 The fence between what an agent wants to do and what it does on-chain.
 
-txfence is a typed, composable policy-and-execution SDK for autonomous agents operating across EVM and Solana. It provides simulation-before-execution, declarative spending policies, and human-in-the-loop hooks as first-class primitives.
+txfence is a typed, composable policy-and-execution SDK for autonomous agents operating across EVM, Solana, and Cosmos. It provides simulation-before-execution, declarative spending policies, and human-in-the-loop hooks as first-class primitives.
 
 ## Why txfence
 
@@ -21,10 +21,12 @@ Read the failure taxonomy: [docs/failure-taxonomy.md](docs/failure-taxonomy.md)
 
 | Package | Description |
 |---|---|
-| `@txfence/core` | Policy engine, type definitions, agent orchestration, cap locking |
-| `@txfence/evm` | EVM chain adapter (Ethereum, Arbitrum, Optimism, Base) |
+| `@txfence/core` | Policy engine, agent orchestration, cap locking, receipt storage, webhook approval |
+| `@txfence/evm` | EVM chain adapter (Ethereum, Arbitrum, Optimism, Base) with Tenderly support |
 | `@txfence/solana` | Solana chain adapter |
+| `@txfence/cosmos` | Cosmos chain adapter (Cosmos Hub, Osmosis) |
 | `@txfence/redis` | Redis-backed cap lock provider for multi-agent environments |
+| `@txfence/storage-pg` | PostgreSQL receipt storage backend |
 | `@txfence/mcp` | MCP server exposing txfence as tools for AI assistants |
 | `@txfence/cli` | Command-line interface for policy checking, simulation, and execution |
 | `@txfence/react` | React hooks for building frontends on top of txfence agents |
@@ -37,10 +39,6 @@ Read the failure taxonomy: [docs/failure-taxonomy.md](docs/failure-taxonomy.md)
 import { createAgent } from '@txfence/core'
 import type { ChainAdapter } from '@txfence/core'
 import { simulateEvmAction, executeEvmAction, privateKeySigner } from '@txfence/evm'
-
-const evmAdapter: ChainAdapter = {
-  simulate: simulateEvmAction,
-}
 
 const signer = privateKeySigner(process.env.PRIVATE_KEY as `0x${string}`)
 
@@ -59,7 +57,7 @@ const agent = createAgent(
     },
     signer,
   },
-  { ethereum: evmAdapter },
+  { ethereum: { simulate: simulateEvmAction } },
   { ethereum: 'https://ethereum.publicnode.com' },
   (action, chainId, rpcUrl, evaluation, simulation) =>
     executeEvmAction(action, chainId, rpcUrl, signer, evaluation, simulation)
@@ -67,10 +65,10 @@ const agent = createAgent(
 
 const result = await agent.submit({
   action: {
-    kind:    'transfer',
-    chain:   'ethereum',
-    token:   { token: 'ETH', amount: 100000000000000000n, decimals: 18 },
-    to:      '0xRECIPIENT',
+    kind:  'transfer',
+    chain: 'ethereum',
+    token: { token: 'ETH', amount: 100000000000000000n, decimals: 18 },
+    to:    '0xRECIPIENT',
   },
   policy: agent.config.policies,
 })
@@ -96,49 +94,106 @@ switch (result.status) {
 
 ---
 
+## Tenderly simulation
+
+For deeper EVM simulation coverage with full execution traces and accurate revert reasons:
+
+```typescript
+import { simulateEvmAction, simulateWithTenderly } from '@txfence/evm'
+import type { TenderlyConfig } from '@txfence/evm'
+
+const tenderlyConfig: TenderlyConfig = {
+  accessKey:    process.env.TENDERLY_ACCESS_KEY!,
+  accountSlug:  'your-account',
+  projectSlug:  'your-project',
+}
+
+// simulateWithTenderly returns coverageLevel: 'deep' with full call trace,
+// state diff, and decoded logs. Falls back to eth_call if not configured.
+```
+
+---
+
+## Webhook approval
+
+For transactions above `humanApprovalThreshold`, the pipeline dispatches a webhook and waits for a human decision before executing:
+
+```typescript
+import { createWebhookApprovalProvider } from '@txfence/core'
+
+const approvalProvider = createWebhookApprovalProvider(
+  'https://your-system.com/webhooks/txfence',
+  'https://your-system.com/approvals',
+  { webhookSecret: process.env.WEBHOOK_SECRET }
+)
+
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  undefined, undefined, approvalProvider
+)
+```
+
+The webhook payload includes `approveUrl` and `rejectUrl` for one-click email approval. Payloads are signed with HMAC-SHA256 via the `X-TXFence-Signature` header. Cancel-on-timeout is the hard default.
+
+---
+
+## Cap locking
+
+For multi-agent environments where multiple agents share a spend cap:
+
+```typescript
+import { createMemoryCapLockProvider } from '@txfence/core'
+// or for distributed environments:
+import { createRedisCapLockProvider } from '@txfence/redis'
+
+const capLockProvider = createMemoryCapLockProvider([
+  {
+    capId: 'treasury-main',
+    absoluteCap:   { maxAmount: 500_000n, token: 'USDC' },
+    rollingWindow: { windowMs: 3_600_000, maxAmount: 25_000n, token: 'USDC' },
+  }
+])
+```
+
+Two independent risk controls: absolute cap (hard budget) and rolling window (velocity circuit breaker). Two-phase acquire/commit/release prevents race conditions across concurrent agents.
+
+---
+
+## Receipt storage
+
+```typescript
+import { createFileReceiptStore } from '@txfence/core'
+// or for production:
+import { createPgReceiptStore, initSchema } from '@txfence/storage-pg'
+import { Pool } from 'pg'
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+await initSchema(pool)
+
+const receiptStore = createPgReceiptStore(pool)
+
+// receipts are automatically saved after every successful execution
+const receipts = await receiptStore.list({ chain: 'ethereum', from: 25000000 })
+```
+
+---
+
 ## CLI
 
-Install and scaffold a config:
+Scaffold a config:
 
 ```bash
-cd your-project
 npx txfence init
 ```
 
-Simulate an action:
+Simulate, check policy, submit:
 
 ```bash
-npx txfence simulate \
-  --kind transfer \
-  --chain ethereum \
-  --to 0xRECIPIENT \
-  --token ETH \
-  --amount 100000000000000000
+npx txfence simulate --kind transfer --chain ethereum --to 0xRECIPIENT --token ETH --amount 100000000000000000
+npx txfence check-policy --kind transfer --chain ethereum --to 0xRECIPIENT --token ETH --amount 100000000000000000
+npx txfence submit --kind transfer --chain ethereum --to 0xRECIPIENT --token ETH --amount 100000000000000000
+npx txfence submit --execute  # add --execute for real transactions
 ```
-
-Check a policy:
-
-```bash
-npx txfence check-policy \
-  --kind transfer \
-  --chain ethereum \
-  --to 0xRECIPIENT \
-  --token ETH \
-  --amount 100000000000000000
-```
-
-Submit (dry run by default):
-
-```bash
-npx txfence submit \
-  --kind transfer \
-  --chain ethereum \
-  --to 0xRECIPIENT \
-  --token ETH \
-  --amount 100000000000000000
-```
-
-Add `--execute` to broadcast for real.
 
 ---
 
@@ -151,13 +206,13 @@ Add txfence as a tool for any MCP-compatible AI assistant:
   "mcpServers": {
     "txfence": {
       "command": "npx",
-      "args": ["tsx", "packages/mcp/src/index.ts", "--config", "./txfence.config.ts"]
+      "args": ["tsx", "packages/mcp/src/bin.ts", "--config", "./txfence.config.ts"]
     }
   }
 }
 ```
 
-The assistant can then call `txfence_simulate`, `txfence_check_policy`, `txfence_submit`, `txfence_get_receipt`, and `txfence_explain_rejection`. See [packages/mcp/README.md](packages/mcp/README.md) for the full tool reference.
+Five tools: `txfence_simulate`, `txfence_check_policy`, `txfence_submit`, `txfence_get_receipt`, `txfence_explain_rejection`. See [packages/mcp/README.md](packages/mcp/README.md) for the full reference.
 
 ---
 
@@ -181,7 +236,7 @@ function TransferButton() {
   const { result, loading, submit } = useSubmit(agent)
 
   return (
-    <button onClick={() => submit(transferAction, policy)} disabled={loading}>
+    <button onClick={() => submit(action, policy)} disabled={loading}>
       {loading ? 'submitting...' : 'send'}
     </button>
   )
@@ -202,6 +257,7 @@ function TransferButton() {
 | Stale allowlist | Partially — with metadata verification |
 | Gas estimation failure | Partially — minimum buffer multiplier enforced |
 | Spend cap race condition | Yes — with cap locking interface |
+| Unauthorized approval execution | Yes — HMAC-signed webhooks, cancel on timeout |
 
 ---
 
@@ -218,32 +274,48 @@ npx tsx evm-swap.ts
 ## Status
 
 ```
-packages/core        policy engine, agent orchestration, cap locking — 79 tests
-packages/evm         simulate, build, sign, broadcast, metadata verify
-packages/solana      simulate, build, sign, broadcast (transfers + pre-built txs)
-packages/redis       Redis CapLockProvider with atomic Lua scripts
-packages/mcp         MCP server with 5 tools — 5 tests
-packages/cli         CLI with 5 commands — 7 tests
-packages/react       React hooks — 7 tests
-packages/integration Anvil integration tests — 5 tests
+packages/core         policy engine, agent orchestration, cap locking,
+                      receipt storage, webhook approval — 96 tests
+packages/evm          simulate (eth_call + Tenderly), build, sign,
+                      broadcast, metadata verify — 7 tests
+packages/solana       simulate, build, sign, broadcast — 5 tests
+packages/cosmos       simulate, build, sign, broadcast
+                      (cosmoshub + osmosis) — 10 tests
+packages/redis        Redis CapLockProvider with atomic Lua scripts
+packages/storage-pg   PostgreSQL receipt storage — 12 tests
+packages/mcp          MCP server with 5 tools — 5 tests
+packages/cli          CLI with 5 commands — 7 tests
+packages/react        React hooks — 7 tests
+packages/integration  Anvil integration tests — 5 tests
 ```
 
-108 tests. Zero type errors across all packages.
+149 tests. CI green. Zero type errors across all packages.
 
 - [x] Type definitions
 - [x] Policy engine
-- [x] EVM chain adapter
+- [x] EVM chain adapter with Tenderly simulation
 - [x] Solana chain adapter
+- [x] Cosmos chain adapter (Cosmos Hub, Osmosis)
 - [x] EVM signing and broadcasting
-- [x] Solana signing and broadcasting (transfers + pre-built transactions)
+- [x] Solana signing and broadcasting
 - [x] Cap locking — absolute cap + rolling window
-- [x] Contract metadata verification
 - [x] Redis CapLockProvider
+- [x] Contract metadata verification
+- [x] Pluggable receipt storage — memory, file, PostgreSQL
+- [x] Webhook-based human approval with HMAC signing
 - [x] Multi-chain adapter
 - [x] MCP server
 - [x] CLI
 - [x] React hooks
 - [x] Anvil integration tests
+- [x] GitHub Actions CI
+- [x] tsup build pipeline
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
