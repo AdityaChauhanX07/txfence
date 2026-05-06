@@ -4,6 +4,25 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.13.0
+
+On-chain reconciliation monitor.
+
+- Added `@txfence/monitor` package
+- Forward reconciliation — scans blocks for transactions from known agent addresses and checks if each one exists in the receipt store; detects signing key compromise or out-of-band execution
+- Reverse reconciliation — checks recorded receipts against on-chain state to detect chain reorganizations; runs on a separate `reconcileIntervalMs` interval (default 5 minutes)
+- `UnrecordedTransactionEvent` with `severity: 'warning' | 'critical'` — warning fires immediately, critical fires after the grace period expires (default 30 seconds)
+- Separate `onCriticalTransaction` callback for escalation handling distinct from general warnings
+- `CheckpointStore` interface with memory and file implementations — persists last checked block and pending transaction set across process restarts
+- `createFileCheckpointStore(path)` — JSON file, reads and writes atomically per check, survives restarts
+- `maxBlocksPerPoll` (default 5) — limits RPC calls per poll interval; documented prominently that dedicated RPC endpoints are required in production
+- `reconcileIntervalMs` (default 300000) — separate from `pollIntervalMs` (default 12000) since reverse reconciliation is expensive
+- `ReorgEvent` fired when a recorded receipt's transaction is missing or in a different block on-chain
+- EVM only in v1 — Solana and Cosmos monitoring planned
+- 11 tests covering checkpoint stores, file persistence, and monitor lifecycle
+
+---
+
 ## v0.12.0
 
 Append-only audit log for compliance teams.
