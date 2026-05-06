@@ -27,3 +27,5 @@ export type {
   ApprovalProvider, ApprovalRequest, ApprovalDecision,
   PolicyContext, MemoryApprovalProvider, WebhookApprovalOptions,
 } from './approval/index.js'
+export { diffPolicies, createTestActions } from './diff/index.js'
+export type { PolicyDiff, PolicyDiffInput, ActionDiffResult, ActionDiffDirection, ChangedCheck } from './diff/index.js'
