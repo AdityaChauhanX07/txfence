@@ -4,6 +4,25 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.12.0
+
+Append-only audit log for compliance teams.
+
+- Added `@txfence/audit` package
+- `AuditEntry` type captures every agent decision: action, policy snapshot at decision time, policy evaluation, simulation result, approval request and decision if applicable, and final outcome
+- `AuditOutcome` discriminated union covers all pipeline outcomes: `success`, `policy_rejected`, `simulation_failed`, `approval_timeout`, `execution_failed`, and `dry_run` (with `stoppedAt` field)
+- `AuditFilter` supports filtering by `chain`, `from`/`to` timestamp, `status`, and `actionKind`
+- `createMemoryAuditLog()` — in-memory implementation for development and testing
+- `createFileAuditLog(path)` — append-only NDJSON file backend, one entry per line, never rewrites
+- `clonePolicy()` — deep clones policy with bigint revival; called inside `record()` so policySnapshot is immutable even if caller mutates the policy object after recording
+- Full bigint serialization round-trip for action, policy snapshot, and simulation fields
+- Wired into `runPipeline` as optional 10th parameter — every pipeline outcome is recorded regardless of success or failure
+- `createAgent` accepts and forwards the `auditLog` parameter
+- Known limitation documented in README: no tamper evidence in v1 — the file backend is append-only but does not chain entries with hashes
+- 14 tests covering memory and file backends, bigint round-trips, filtering, policy mutation safety, and clonePolicy correctness
+
+---
+
 ## v0.11.3
 
 Cap warning callbacks for proactive threshold alerts.
