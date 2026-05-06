@@ -30,6 +30,7 @@ Read the failure taxonomy: [docs/failure-taxonomy.md](docs/failure-taxonomy.md)
 | `@txfence/mcp` | MCP server exposing txfence as tools for AI assistants |
 | `@txfence/cli` | Command-line interface for policy checking, simulation, and execution |
 | `@txfence/react` | React hooks for building frontends on top of txfence agents |
+| `@txfence/audit` | Append-only audit log for compliance — captures every policy decision, rejection, and execution outcome |
 
 ---
 
@@ -178,6 +179,35 @@ const receipts = await receiptStore.list({ chain: 'ethereum', from: 25000000 })
 
 ---
 
+## Audit log
+
+```typescript
+import { createFileAuditLog } from '@txfence/audit'
+
+const auditLog = createFileAuditLog('./audit.jsonl')
+
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  undefined, undefined, undefined, undefined,
+  receiptStore, auditLog
+)
+
+// every decision is recorded — rejections, simulations, approvals, executions
+const rejected = await auditLog.query({ status: 'policy_rejected' })
+const swaps = await auditLog.query({ actionKind: 'swap', from: Date.now() - 86400000 })
+```
+
+The audit log captures every pipeline decision regardless of outcome.
+Unlike receipt storage which only records successful transactions,
+the audit log records policy rejections, simulation failures, approval
+decisions, and execution outcomes. Designed for compliance teams that
+need a complete trail of agent activity.
+
+Known limitation: no tamper evidence in v1. Use a write-once storage
+backend (e.g. S3 with object lock) for strict tamper-evidence requirements.
+
+---
+
 ## CLI
 
 Scaffold a config:
@@ -286,10 +316,11 @@ packages/storage-pg   PostgreSQL receipt storage — 12 tests
 packages/mcp          MCP server with 5 tools — 5 tests
 packages/cli          CLI with 5 commands — 7 tests
 packages/react        React hooks — 7 tests
+packages/audit       append-only audit log — memory + file backends — 14 tests
 packages/integration  Anvil integration tests — 5 tests
 ```
 
-149 tests. CI green. Zero type errors across all packages.
+163 tests. CI green. Zero type errors across all packages.
 
 - [x] Type definitions
 - [x] Policy engine
@@ -310,6 +341,7 @@ packages/integration  Anvil integration tests — 5 tests
 - [x] Anvil integration tests
 - [x] GitHub Actions CI
 - [x] tsup build pipeline
+- [x] Append-only audit log with policy snapshot immutability
 
 ---
 
