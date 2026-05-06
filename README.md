@@ -31,6 +31,7 @@ Read the failure taxonomy: [docs/failure-taxonomy.md](docs/failure-taxonomy.md)
 | `@txfence/cli` | Command-line interface for policy checking, simulation, and execution |
 | `@txfence/react` | React hooks for building frontends on top of txfence agents |
 | `@txfence/audit` | Append-only audit log for compliance — captures every policy decision, rejection, and execution outcome |
+| `@txfence/monitor` | On-chain reconciliation monitor — detects unrecorded transactions and chain reorganizations |
 
 ---
 
@@ -208,6 +209,56 @@ backend (e.g. S3 with object lock) for strict tamper-evidence requirements.
 
 ---
 
+## Monitor
+
+```typescript
+import { createMonitor, createFileCheckpointStore } from '@txfence/monitor'
+import { createFileReceiptStore } from '@txfence/core'
+
+const monitor = createMonitor({
+  chains: ['ethereum'],
+  agentAddresses: {
+    ethereum: ['0xYOUR_AGENT_ADDRESS'],
+  },
+  rpcUrls: {
+    ethereum: process.env.ETHEREUM_RPC_URL!,
+  },
+  receiptStore: createFileReceiptStore('./receipts.jsonl'),
+  checkpointStore: createFileCheckpointStore('./monitor-checkpoint.json'),
+  pollIntervalMs: 12000,
+  maxBlocksPerPoll: 5,
+  gracePeriodMs: 30000,
+  reconcileIntervalMs: 300000,
+  onUnrecordedTransaction: (event) => {
+    if (event.severity === 'critical') {
+      // page someone — signing key may be compromised
+      console.error('CRITICAL: unrecorded transaction', event)
+    } else {
+      console.warn('WARNING: unrecorded transaction (within grace period)', event)
+    }
+  },
+  onCriticalTransaction: (event) => {
+    // separate escalation path for critical events
+  },
+  onReorgDetected: (event) => {
+    console.warn('chain reorganization detected', event)
+  },
+})
+
+await monitor.start()
+```
+
+The monitor watches known agent addresses by scanning blocks. If a transaction
+appears on-chain from an agent address that txfence did not record, it fires
+`onUnrecordedTransaction`. After the grace period passes without the transaction
+appearing in the receipt store, severity escalates to `critical`.
+
+Important: block scanning is RPC-intensive. Use a dedicated RPC endpoint
+(Alchemy, Infura) rather than a public node in production. Public nodes will
+rate-limit you under continuous polling.
+
+---
+
 ## CLI
 
 Scaffold a config:
@@ -317,10 +368,11 @@ packages/mcp          MCP server with 5 tools — 5 tests
 packages/cli          CLI with 5 commands — 7 tests
 packages/react        React hooks — 7 tests
 packages/audit       append-only audit log — memory + file backends — 14 tests
+packages/monitor     on-chain reconciliation monitor — 11 tests
 packages/integration  Anvil integration tests — 5 tests
 ```
 
-163 tests. CI green. Zero type errors across all packages.
+194 tests. CI green. Zero type errors across all packages.
 
 - [x] Type definitions
 - [x] Policy engine
@@ -342,6 +394,7 @@ packages/integration  Anvil integration tests — 5 tests
 - [x] GitHub Actions CI
 - [x] tsup build pipeline
 - [x] Append-only audit log with policy snapshot immutability
+- [x] On-chain reconciliation monitor with checkpoint persistence
 
 ---
 
