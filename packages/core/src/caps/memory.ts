@@ -1,4 +1,4 @@
-import type { CapLockProvider, CapLockResult, CapConfig } from './provider.js'
+import type { CapLockProvider, CapLockResult, CapConfig, CapWarningEvent } from './provider.js'
 
 type WindowBucket = {
   windowStart: number
@@ -13,7 +13,38 @@ type CapState = {
   pendingLocks: Map<string, bigint>
 }
 
-export function createMemoryCapLockProvider(configs: CapConfig[]): CapLockProvider {
+export type MemoryCapLockProviderOptions = {
+  onCapWarning?: (event: CapWarningEvent) => void
+}
+
+function checkWarning(
+  capId: string,
+  config: CapConfig,
+  currentAmount: bigint,
+  capAmount: bigint,
+  token: string,
+  type: 'absolute' | 'rolling_window',
+  onWarning?: (event: CapWarningEvent) => void,
+): void {
+  if (onWarning === undefined) return
+  if (config.warningThresholdPct === undefined) return
+  const pctUsed = Number(currentAmount * 100n / capAmount)
+  if (pctUsed >= config.warningThresholdPct) {
+    onWarning({
+      capId,
+      type,
+      currentAmount,
+      capAmount,
+      pctUsed: Math.round(pctUsed * 10) / 10,
+      token,
+    })
+  }
+}
+
+export function createMemoryCapLockProvider(
+  configs: CapConfig[],
+  options?: MemoryCapLockProviderOptions,
+): CapLockProvider {
   const state = new Map<string, CapState>()
 
   for (const config of configs) {
@@ -27,7 +58,7 @@ export function createMemoryCapLockProvider(configs: CapConfig[]): CapLockProvid
   }
 
   return {
-    async acquire(capId: string, amount: bigint, _token: string): Promise<CapLockResult> {
+    async acquire(capId: string, amount: bigint, token: string): Promise<CapLockResult> {
       const capState = state.get(capId)
       if (capState === undefined) throw new Error('unknown capId: ' + capId)
 
@@ -38,6 +69,8 @@ export function createMemoryCapLockProvider(configs: CapConfig[]): CapLockProvid
         if (capState.absoluteTotal + capState.pendingTotal + amount > config.absoluteCap.maxAmount) {
           return { granted: false, reason: 'absolute_cap_exceeded' }
         }
+        const projected = capState.absoluteTotal + capState.pendingTotal + amount
+        checkWarning(capId, config, projected, config.absoluteCap.maxAmount, token, 'absolute', options?.onCapWarning)
       }
 
       if (config.rollingWindow !== undefined) {
@@ -50,6 +83,8 @@ export function createMemoryCapLockProvider(configs: CapConfig[]): CapLockProvid
         if (windowTotal + capState.pendingTotal + amount > maxAmount) {
           return { granted: false, reason: 'rolling_window_exceeded' }
         }
+        const projectedWindow = windowTotal + capState.pendingTotal + amount
+        checkWarning(capId, config, projectedWindow, maxAmount, token, 'rolling_window', options?.onCapWarning)
       }
 
       capState.pendingTotal += amount
@@ -73,6 +108,12 @@ export function createMemoryCapLockProvider(configs: CapConfig[]): CapLockProvid
       capState.absoluteTotal += amount
       capState.windowBuckets.push({ windowStart: Date.now(), amount })
       capState.pendingLocks.delete(lockId)
+
+      if (capState.config.absoluteCap !== undefined) {
+        checkWarning(capId, capState.config, capState.absoluteTotal, capState.config.absoluteCap.maxAmount, capState.config.absoluteCap.token, 'absolute', options?.onCapWarning)
+      }
     },
+
+    ...(options?.onCapWarning !== undefined ? { onCapWarning: options.onCapWarning } : {}),
   }
 }

@@ -12,6 +12,8 @@ export type {
   CapLockProvider,
   CapLockResult,
   CapConfig,
+  CapWarningEvent,
+  MemoryCapLockProviderOptions,
   RollingWindowConfig,
   AbsoluteCapConfig,
 } from './caps/index.js'
