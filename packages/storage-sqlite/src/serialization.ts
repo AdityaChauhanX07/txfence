@@ -1,8 +1,8 @@
-import type { Action, PolicyEvaluation, SuccessReceipt } from '@txfence/core'
+import type { SuccessReceipt, Action, PolicyEvaluation } from '@txfence/core'
+import { bigintReplacer, reviveSuccessReceipt } from '@txfence/core'
 
-export function bigintReplacer(_: string, v: unknown): unknown {
-  return typeof v === 'bigint' ? v.toString() : v
-}
+// Re-export bigintReplacer for use in store.ts
+export { bigintReplacer }
 
 export function serializeReceipt(receipt: SuccessReceipt): {
   tx_hash: string
@@ -18,7 +18,7 @@ export function serializeReceipt(receipt: SuccessReceipt): {
     tx_hash: receipt.txHash,
     chain: (receipt.action as { chain: string }).chain,
     action: JSON.stringify(receipt.action, bigintReplacer),
-    policy_eval: JSON.stringify(receipt.policyEvaluation),
+    policy_eval: JSON.stringify(receipt.policyEvaluation, bigintReplacer),
     simulation: JSON.stringify(receipt.simulation, bigintReplacer),
     confirmed_at_block: receipt.confirmedAtBlock,
     confirmed_at_ms: receipt.confirmedAtMs,
@@ -27,34 +27,16 @@ export function serializeReceipt(receipt: SuccessReceipt): {
 }
 
 export function deserializeReceipt(row: Record<string, unknown>): SuccessReceipt {
-  // SQLite stores JSON as TEXT — parse each column back to an object
-  const sim = JSON.parse(row['simulation'] as string) as Record<string, unknown>
-  sim['gasEstimate'] = BigInt(sim['gasEstimate'] as string)
-
-  const action = JSON.parse(row['action'] as string) as Record<string, unknown>
-  if (action['kind'] === 'transfer') {
-    const token = action['token'] as Record<string, unknown>
-    token['amount'] = BigInt(token['amount'] as string)
-  }
-  if (action['kind'] === 'swap') {
-    const from = action['from'] as Record<string, unknown>
-    from['amount'] = BigInt(from['amount'] as string)
-  }
-  if (action['kind'] === 'contract_call' && action['value'] !== undefined && action['value'] !== null) {
-    const value = action['value'] as Record<string, unknown>
-    value['amount'] = BigInt(value['amount'] as string)
-  }
-
-  const policyEval = JSON.parse(row['policy_eval'] as string) as PolicyEvaluation
-
-  return {
+  // SQLite stores JSON as TEXT — parse each column before revival
+  const obj: Record<string, unknown> = {
     status: 'success',
-    txHash: row['tx_hash'] as string,
-    action: action as unknown as Action,
-    policyEvaluation: policyEval,
-    simulation: sim as unknown as SuccessReceipt['simulation'],
+    txHash: row['tx_hash'],
+    action: typeof row['action'] === 'string' ? JSON.parse(row['action']) : row['action'],
+    policyEvaluation: typeof row['policy_eval'] === 'string' ? JSON.parse(row['policy_eval']) : row['policy_eval'],
+    simulation: typeof row['simulation'] === 'string' ? JSON.parse(row['simulation']) : row['simulation'],
     confirmedAtBlock: Number(row['confirmed_at_block']),
     confirmedAtMs: Number(row['confirmed_at_ms']),
-    gasUsed: BigInt(row['gas_used'] as string),
+    gasUsed: row['gas_used'],
   }
+  return reviveSuccessReceipt(obj)
 }
