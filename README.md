@@ -276,6 +276,18 @@ npx txfence submit --kind transfer --chain ethereum --to 0xRECIPIENT --token ETH
 npx txfence submit --execute  # add --execute for real transactions
 ```
 
+Compare two policy configurations:
+
+```bash
+npx txfence diff \
+  --config-a ./txfence.config.ts \
+  --config-b ./txfence.config.proposed.ts \
+  --generate-actions
+```
+
+Exits 1 if any actions are newly rejected — CI-friendly for policy change review.
+Use `--actions-file actions.json` to test against a specific set of actions instead.
+
 ---
 
 ## MCP server
@@ -293,7 +305,7 @@ Add txfence as a tool for any MCP-compatible AI assistant:
 }
 ```
 
-Five tools: `txfence_simulate`, `txfence_check_policy`, `txfence_submit`, `txfence_get_receipt`, `txfence_explain_rejection`. See [packages/mcp/README.md](packages/mcp/README.md) for the full reference.
+Six tools: `txfence_simulate`, `txfence_check_policy`, `txfence_submit`, `txfence_get_receipt`, `txfence_explain_rejection`, `txfence_diff_policies`. See [packages/mcp/README.md](packages/mcp/README.md) for the full reference.
 
 ---
 
@@ -365,14 +377,14 @@ packages/cosmos       simulate, build, sign, broadcast
 packages/redis        Redis CapLockProvider with atomic Lua scripts
 packages/storage-pg   PostgreSQL receipt storage — 12 tests
 packages/mcp          MCP server with 5 tools — 5 tests
-packages/cli          CLI with 5 commands — 7 tests
+packages/cli          CLI with 6 commands — 7 tests
 packages/react        React hooks — 7 tests
 packages/audit       append-only audit log — memory + file backends — 14 tests
 packages/monitor     on-chain reconciliation monitor — 11 tests
 packages/integration  Anvil integration tests — 5 tests
 ```
 
-194 tests. CI green. Zero type errors across all packages.
+204 tests. CI green. Zero type errors across all packages.
 
 - [x] Type definitions
 - [x] Policy engine
@@ -395,6 +407,7 @@ packages/integration  Anvil integration tests — 5 tests
 - [x] tsup build pipeline
 - [x] Append-only audit log with policy snapshot immutability
 - [x] On-chain reconciliation monitor with checkpoint persistence
+- [x] Policy diff tool with CLI and MCP integration
 
 ---
 
