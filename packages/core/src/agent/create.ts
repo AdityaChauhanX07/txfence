@@ -10,6 +10,8 @@ import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider } from '../approval/types.js'
 import { runPipeline } from './pipeline.js'
 
+type AuditLogLike = Parameters<typeof runPipeline>[9]
+
 export function createAgent(
   config: AgentConfig,
   adapters: AdapterMap,
@@ -25,6 +27,7 @@ export function createAgent(
   metadataVerifier?: MetadataVerifier,
   approvalProvider?: ApprovalProvider,
   receiptStore?: ReceiptStore,
+  auditLog?: AuditLogLike,
 ): Agent {
   return {
     config,
@@ -39,6 +42,7 @@ export function createAgent(
         metadataVerifier,
         approvalProvider,
         receiptStore,
+        auditLog,
       ),
   }
 }
