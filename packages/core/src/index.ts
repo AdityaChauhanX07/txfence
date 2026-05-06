@@ -29,3 +29,13 @@ export type {
 } from './approval/index.js'
 export { diffPolicies, createTestActions } from './diff/index.js'
 export type { PolicyDiff, PolicyDiffInput, ActionDiffResult, ActionDiffDirection, ChangedCheck } from './diff/index.js'
+export {
+  bigintReplacer,
+  serializeWithBigInt,
+  parseWithBigInt,
+  reviveTokenAmount,
+  revivePolicy,
+  reviveAction,
+  reviveSimulationResult,
+  reviveSuccessReceipt,
+} from './serialization/index.js'
