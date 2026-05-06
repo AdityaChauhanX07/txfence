@@ -4,6 +4,22 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.14.0
+
+Policy diff tool.
+
+- Added `diffPolicies(input: PolicyDiffInput): PolicyDiff` to `@txfence/core` — pure function, no async, no chain calls
+- Given two policies and a set of test actions, returns which actions changed between them and how
+- `ActionDiffDirection` covers three cases: `newly_allowed`, `newly_rejected`, and `rejection_reason_changed` — catches the case where both policies reject but for different reasons
+- `ChangedCheck` type shows exactly which checks changed per action, with the rejection reason in each policy
+- `summary` block includes `requiresSimulation` count — how many actions had simulation-dependent checks skipped because no simulationResult was provided
+- Added `createTestActions(policy: Policy): Array<{ action: Action }>` — generates a minimal covering set: action at spend limit, action over limit, swap per allowed contract, swap targeting unlisted contract, swap with zero slippage
+- Added `txfence diff` CLI command — `--config-a`, `--config-b`, `--actions-file` or `--generate-actions`; exits 1 if newly-rejected actions found (CI-friendly for policy change review)
+- Added `txfence_diff_policies` MCP tool — AI assistants can compare policies and explain the blast radius of a change; auto-generates test actions from policyA if none provided
+- 10 new tests in `packages/core/src/diff/diff.test.ts` covering all three direction values, mixed summaries, requiresSimulation counting, and createTestActions shape
+
+---
+
 ## v0.13.0
 
 On-chain reconciliation monitor.
