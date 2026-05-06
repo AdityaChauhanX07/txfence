@@ -1,5 +1,8 @@
 import { z } from 'zod'
 import type { Action, Policy, ChainId, TokenAmount } from '@txfence/core'
+import { bigintReplacer } from '@txfence/core'
+
+export { bigintReplacer }
 
 export const tokenAmountSchema = z.object({
   token: z.string(),
@@ -96,10 +99,6 @@ export function buildPolicy(input: PolicyInput): Policy {
     humanApprovalTimeoutMs: input.humanApprovalTimeoutMs,
     capLockMode: input.capLockMode,
   }
-}
-
-export function bigintReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? value.toString() : value
 }
 
 export function textResult(text: string) {
