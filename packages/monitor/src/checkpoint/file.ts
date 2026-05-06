@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { ChainId } from '../types.js'
 import type { CheckpointStore } from '../types.js'
@@ -17,9 +17,15 @@ function read(filePath: string): CheckpointData {
   }
 }
 
+// Write-then-rename ensures the checkpoint file is never partially written.
+// On POSIX: rename is atomic — readers always see either the old or new file.
+// On Windows: rename is not atomic but the .tmp file is replaced only after
+// a complete write, so the checkpoint file is never left in a partial state.
 function write(filePath: string, data: CheckpointData): void {
   mkdirSync(dirname(filePath), { recursive: true })
-  writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8')
+  const tmpPath = filePath + '.tmp'
+  writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
+  renameSync(tmpPath, filePath)
 }
 
 export function createFileCheckpointStore(filePath: string): CheckpointStore {

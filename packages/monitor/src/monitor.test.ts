@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, rmSync } from 'node:fs'
+import { mkdirSync, rmSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createMemoryCheckpointStore } from './checkpoint/memory.js'
 import { createFileCheckpointStore } from './checkpoint/file.js'
@@ -89,6 +89,22 @@ describe('createFileCheckpointStore', () => {
     await store.setLastBlock('base', 200)
     expect(await store.getLastBlock('ethereum')).toBe(100)
     expect(await store.getLastBlock('base')).toBe(200)
+  })
+
+  it('does not leave a .tmp file after successful write', async () => {
+    const store = createFileCheckpointStore(TMP_FILE)
+    await store.setLastBlock('ethereum', 25000000)
+    const tmpPath = TMP_FILE + '.tmp'
+    expect(existsSync(tmpPath)).toBe(false)
+    expect(existsSync(TMP_FILE)).toBe(true)
+  })
+
+  it('recovers correctly when reading after a successful write', async () => {
+    const store = createFileCheckpointStore(TMP_FILE)
+    await store.setLastBlock('ethereum', 25000000)
+    await store.setLastBlock('ethereum', 25000001)
+    const store2 = createFileCheckpointStore(TMP_FILE)
+    expect(await store2.getLastBlock('ethereum')).toBe(25000001)
   })
 })
 
