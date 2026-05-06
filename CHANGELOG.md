@@ -4,6 +4,28 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.15.0
+
+Shared bigint serialization utilities and architecture decision records.
+
+**Shared bigint serialization**
+- Added `packages/core/src/serialization/` with shared utilities used by all storage backends
+- `bigintReplacer(key, value)` — JSON replacer that converts bigint to string
+- `serializeWithBigInt(obj)` and `parseWithBigInt(json)` — consistent serialize/parse wrappers
+- `reviveTokenAmount`, `revivePolicy`, `reviveAction`, `reviveSimulationResult`, `reviveSuccessReceipt` — typed revival functions per domain shape
+- All revival functions exported from `@txfence/core` public surface
+- Refactored `@txfence/storage-pg`, `@txfence/storage-sqlite`, `@txfence/audit`, and `@txfence/mcp` to import from core instead of implementing locally
+- `@txfence/audit` serialization.ts reduced from 93 lines to 35 — clonePolicy and deserializeEntry now use shared revival functions
+- Correctness fix in `@txfence/storage-sqlite`: policy_eval now serialized with bigintReplacer consistently
+- 11 new tests in `packages/core/src/serialization/serialization.test.ts`
+
+**Architecture decision records**
+- Added `docs/decisions/` directory with 12 ADRs documenting major design decisions
+- Decisions covered: ioredis selection, block scanning approach, policy snapshot cloning, MCP dry-run default, declarative action graph, cancel-on-timeout, tsup build pipeline, better-sqlite3, MCP bin/index separation, per-action simulation result, coverage level naming, ChainAdapter interface location
+- Added `docs/decisions/README.md` with ADR format and index
+
+---
+
 ## v0.14.0
 
 Policy diff tool.
