@@ -4,6 +4,26 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.11.2
+
+SQLite receipt storage backend.
+
+- Added `@txfence/storage-sqlite` package
+- `createSqliteReceiptStore(db, options?)` — implements the `ReceiptStore` interface backed by SQLite via better-sqlite3
+- `initSchema(db, options?)` — synchronous schema creation, idempotent, run once on startup
+- Uses better-sqlite3 (synchronous API) wrapped in Promise.resolve() to match the async ReceiptStore interface
+- `INSERT OR REPLACE` for idempotent upserts
+- `tableName` option defaults to `txfence_receipts`, fully configurable
+- In-memory database support: pass `':memory:'` as the database path for tests
+- JSON serialization for action, policy_eval, and simulation fields (SQLite TEXT vs PostgreSQL JSONB)
+- Full bigint round-trip via string serialization
+- Indexes on `chain` and `confirmed_at_block` for efficient filtering
+- 12 tests using an in-memory SQLite database — no external dependencies required
+- Peer dependency on `better-sqlite3 ^9.4.3`
+- When to use: SQLite for local development and single-process staging, PostgreSQL for production multi-process deployments
+
+---
+
 ## v0.11.1
 
 Expanded integration test suite.
