@@ -1,8 +1,11 @@
-import type { Action, PolicyEvaluation, SuccessReceipt } from '@txfence/core'
+import type { SuccessReceipt, Action, PolicyEvaluation } from '@txfence/core'
+import {
+  bigintReplacer,
+  reviveSuccessReceipt,
+} from '@txfence/core'
 
-function bigintReplacer(_: string, v: unknown): unknown {
-  return typeof v === 'bigint' ? v.toString() : v
-}
+// Re-export bigintReplacer for use in store.ts
+export { bigintReplacer }
 
 export function serializeReceipt(receipt: SuccessReceipt): Record<string, unknown> {
   return {
@@ -18,31 +21,15 @@ export function serializeReceipt(receipt: SuccessReceipt): Record<string, unknow
 }
 
 export function deserializeReceipt(row: Record<string, unknown>): SuccessReceipt {
-  const sim = row['simulation'] as Record<string, unknown>
-  sim['gasEstimate'] = BigInt(sim['gasEstimate'] as string)
-
-  const action = row['action'] as Record<string, unknown>
-  if (action['kind'] === 'transfer') {
-    const token = action['token'] as Record<string, unknown>
-    token['amount'] = BigInt(token['amount'] as string)
-  }
-  if (action['kind'] === 'swap') {
-    const from = action['from'] as Record<string, unknown>
-    from['amount'] = BigInt(from['amount'] as string)
-  }
-  if (action['kind'] === 'contract_call' && action['value'] !== undefined && action['value'] !== null) {
-    const value = action['value'] as Record<string, unknown>
-    value['amount'] = BigInt(value['amount'] as string)
-  }
-
-  return {
+  const obj: Record<string, unknown> = {
     status: 'success',
-    txHash: row['tx_hash'] as string,
-    action: action as unknown as Action,
-    policyEvaluation: row['policy_eval'] as PolicyEvaluation,
-    simulation: sim as unknown as SuccessReceipt['simulation'],
+    txHash: row['tx_hash'],
+    action: row['action'],
+    policyEvaluation: row['policy_eval'],
+    simulation: row['simulation'],
     confirmedAtBlock: Number(row['confirmed_at_block']),
     confirmedAtMs: Number(row['confirmed_at_ms']),
-    gasUsed: BigInt(row['gas_used'] as string),
+    gasUsed: row['gas_used'],
   }
+  return reviveSuccessReceipt(obj)
 }
