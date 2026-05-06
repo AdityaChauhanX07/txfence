@@ -4,6 +4,22 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.11.3
+
+Cap warning callbacks for proactive threshold alerts.
+
+- Added `warningThresholdPct?: number` to `CapConfig` — triggers warning when this percentage of either cap is reached (e.g. 80 means warn at 80% consumed)
+- Added `CapWarningEvent` type with `capId`, `type` (absolute or rolling_window), `currentAmount`, `capAmount`, `pctUsed`, and `token`
+- Added `onCapWarning?: (event: CapWarningEvent) => void` callback to `CapLockProvider` interface
+- Added `MemoryCapLockProviderOptions` type — pass `{ onCapWarning }` as second argument to `createMemoryCapLockProvider`
+- Warning fires twice per transaction: once on `acquire` (projected spend crosses threshold) and once on `commit` (confirmed spend crosses threshold)
+- Warning fires independently for absolute cap and rolling window cap — teams get separate signals for each control
+- No warning fires if `warningThresholdPct` is not set on the config
+- No warning fires if no callback is provided — safe to call without options
+- 8 new tests covering threshold boundary, both cap types, commit firing, dual-cap firing, and no-callback safety
+
+---
+
 ## v0.11.2
 
 SQLite receipt storage backend.
