@@ -14,7 +14,11 @@
       "types": "./src/contracts/index.ts"
     }
   },
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsup",
     "prepublishOnly": "pnpm run build",
@@ -24,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "fast-check": "^4.7.0",
     "vitest": "^4.1.5"
   }
 }
