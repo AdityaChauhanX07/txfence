@@ -4,6 +4,31 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.16.0
+
+Contract test suites for core interfaces and atomic checkpoint writes.
+
+**Contract test suites**
+- Added `packages/core/src/contracts/` with shared test suites for all four core interfaces
+- `receiptStoreContract(name, createStore)` — 7 tests any ReceiptStore implementation must pass
+- `capLockProviderContract(name, createProvider)` — 5 tests any CapLockProvider must pass
+- `auditLogContract(name, createLog)` — 6 tests any AuditLog must pass
+- `approvalProviderContract(name, createProvider)` — 2 tests any ApprovalProvider must pass
+- All contract suites exported from `@txfence/core` public surface
+- Memory implementations in core and audit now run the contract suites in addition to their own unit tests
+- Any new implementation (Redis, PostgreSQL, etc.) can import and run the contract suite to verify substitutability
+- `./contracts` subpath export added to `@txfence/core` for correct vitest worker context in dependent packages
+
+**Atomic checkpoint writes**
+- Fixed `packages/monitor/src/checkpoint/file.ts` to use write-then-rename pattern
+- Writes to `.tmp` file first, then `renameSync` to the real path
+- Prevents checkpoint corruption from partial writes
+- On POSIX: rename is atomic — readers always see either the old or new file
+- On Windows: `.tmp` file is replaced only after a complete write
+- 2 new tests confirming no `.tmp` file is left after successful write
+
+---
+
 ## v0.15.0
 
 Shared bigint serialization utilities and architecture decision records.
