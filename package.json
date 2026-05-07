@@ -6,7 +6,10 @@
   "scripts": {
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
-    "clean": "pnpm -r run clean"
+    "clean": "pnpm -r run clean",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish"
   },
   "repository": {
     "type": "git",
@@ -21,6 +24,7 @@
   },
   "homepage": "https://github.com/AdityaChauhanX07/txfence#readme",
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }

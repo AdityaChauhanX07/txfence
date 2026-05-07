@@ -82,6 +82,35 @@ txfence makes hard, opinionated calls. Before proposing a change to core behavio
 
 The policy engine is pure TypeScript with no chain dependencies. Keep it that way. Chain-specific logic belongs in adapters, not in core.
 
+## Release process
+
+txfence uses [Changesets](https://github.com/changesets/changesets) for version management.
+
+**When making a change that should be released:**
+
+1. Run `pnpm changeset` in the repo root
+2. Select which packages changed
+3. Select the bump type (patch, minor, major)
+4. Write a summary of the change
+5. Commit the generated `.changeset/*.md` file with your PR
+
+**To release:**
+
+```bash
+# Update versions and changelogs
+pnpm version-packages
+
+# Build and publish to npm
+pnpm release
+```
+
+**Bump type guide:**
+- `patch` — bug fixes, documentation, internal refactors with no API change
+- `minor` — new features, new exports, backward-compatible additions
+- `major` — breaking changes to existing public APIs
+
+**Do not manually edit package.json versions.** Let changesets manage them.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
