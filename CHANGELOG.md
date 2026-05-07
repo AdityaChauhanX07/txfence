@@ -4,6 +4,20 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.19.0
+
+Developer experience improvements.
+
+- Added `pnpm dev` script at the repo root — starts Anvil (if Foundry is installed) and vitest in watch mode for @txfence/core
+- Anvil availability is detected automatically — if not installed, a clear message explains how to install Foundry
+- Color-prefixed output per process: green for Anvil, purple for tests
+- SIGINT and SIGTERM handled cleanly — all child processes stop on Ctrl+C
+- Set ETHEREUM_RPC_URL to use a dedicated RPC endpoint instead of the public node default
+- CONTRIBUTING.md updated with pnpm dev usage at the top of the development workflow section
+- tsx added as a root devDependency
+
+---
+
 ## v0.18.0
 
 End-to-end treasury agent example, security model, runbook, and changesets.
