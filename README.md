@@ -368,7 +368,7 @@ npx tsx evm-swap.ts
 
 ```
 packages/core         policy engine, agent orchestration, cap locking,
-                      receipt storage, webhook approval — 96 tests
+                      receipt storage, webhook approval — 147 tests
 packages/evm          simulate (eth_call + Tenderly), build, sign,
                       broadcast, metadata verify — 7 tests
 packages/solana       simulate, build, sign, broadcast — 5 tests
@@ -379,12 +379,12 @@ packages/storage-pg   PostgreSQL receipt storage — 12 tests
 packages/mcp          MCP server with 5 tools — 5 tests
 packages/cli          CLI with 6 commands — 7 tests
 packages/react        React hooks — 7 tests
-packages/audit       append-only audit log — memory + file backends — 14 tests
-packages/monitor     on-chain reconciliation monitor — 11 tests
-packages/integration  Anvil integration tests — 5 tests
+packages/audit       append-only audit log — memory + file backends — 20 tests
+packages/monitor     on-chain reconciliation monitor — 13 tests
+packages/integration  Anvil integration tests — 7 passing + 5 skipped
 ```
 
-204 tests. CI green. Zero type errors across all packages.
+252 tests passing. CI green. Zero type errors across all packages.
 
 - [x] Type definitions
 - [x] Policy engine

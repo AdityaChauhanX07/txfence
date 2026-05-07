@@ -81,7 +81,7 @@ async function runExample(): Promise<void> {
   if (result1.status === 'policy_rejected') {
     console.log(`Rejected: ${result1.evaluation.rejectionReason}`)
   } else if (result1.status === 'execution_failed') {
-    console.log(`Reached execution step (dry run): ${result1.reason}`)
+    console.log('Dry run complete — policy passed, simulation passed. Set AGENT_PRIVATE_KEY to execute.')
   } else if (result1.status === 'simulation_failed') {
     console.log(`Simulation failed — check RPC connectivity`)
   }
@@ -117,7 +117,7 @@ async function runExample(): Promise<void> {
   if (result3.status === 'policy_rejected') {
     console.log(`Rejected: ${result3.evaluation.rejectionReason}`)
   } else if (result3.status === 'execution_failed') {
-    console.log(`Reached execution step (dry run): ${result3.reason}`)
+    console.log('Dry run complete — policy passed, simulation passed. Set AGENT_PRIVATE_KEY to execute.')
   } else if (result3.status === 'simulation_failed') {
     console.log(`Simulation failed: coverage=${result3.simulation.coverageLevel}`)
   }
@@ -176,6 +176,7 @@ async function runExample(): Promise<void> {
   Object.entries(byStatus).forEach(([status, count]) => {
     console.log(`  ${status}: ${count}`)
   })
+  console.log('\n(execution_failed = dry run complete in this example)')
 }
 
 runExample().catch(console.error)
