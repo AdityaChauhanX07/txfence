@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createMemoryApprovalProvider } from './memory.js'
 import { runPipeline } from '../agent/pipeline.js'
+import { approvalProviderContract } from '../contracts/index.js'
 import type { Policy } from '../types/policy.js'
 import type { TransferAction } from '../types/action.js'
 
@@ -115,3 +116,5 @@ describe('runPipeline with approval provider', () => {
     expect(result.status).toBe('approval_timeout')
   })
 })
+
+approvalProviderContract('createMemoryApprovalProvider — contract', () => createMemoryApprovalProvider())

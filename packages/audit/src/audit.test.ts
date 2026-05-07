@@ -4,8 +4,10 @@ import { join } from 'node:path'
 import { createMemoryAuditLog } from './memory.js'
 import { createFileAuditLog } from './file.js'
 import { clonePolicy } from './serialization.js'
+import { auditLogContract } from '@txfence/core/contracts'
 import type { AuditEntry } from './types.js'
 import type { TransferAction, Policy } from '@txfence/core'
+import type { MinimalAuditLog } from '@txfence/core/contracts'
 
 function makeEntry(overrides: Partial<AuditEntry> = {}): AuditEntry {
   const action: TransferAction = {
@@ -178,3 +180,5 @@ describe('clonePolicy', () => {
     expect(policy.maxSpendPerTx.amount).toBe(1000n)
   })
 })
+
+auditLogContract('createMemoryAuditLog — contract', () => createMemoryAuditLog() as unknown as MinimalAuditLog)

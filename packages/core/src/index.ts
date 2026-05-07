@@ -39,3 +39,5 @@ export {
   reviveSimulationResult,
   reviveSuccessReceipt,
 } from './serialization/index.js'
+export { receiptStoreContract, capLockProviderContract, auditLogContract, approvalProviderContract } from './contracts/index.js'
+export type { MinimalAuditLog } from './contracts/index.js'

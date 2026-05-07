@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createMemoryCapLockProvider } from './memory.js'
+import { capLockProviderContract } from '../contracts/index.js'
 
 // ── absolute cap ─────────────────────────────────────────────────────────────
 
@@ -170,3 +171,5 @@ describe('createMemoryCapLockProvider — both caps', () => {
     expect(result.granted).toBe(true)
   })
 })
+
+capLockProviderContract('createMemoryCapLockProvider — contract', (configs) => createMemoryCapLockProvider(configs))

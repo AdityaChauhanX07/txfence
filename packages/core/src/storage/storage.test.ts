@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createMemoryReceiptStore } from './memory.js'
 import { createFileReceiptStore } from './file.js'
+import { receiptStoreContract } from '../contracts/index.js'
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SuccessReceipt } from '../types/receipt.js'
@@ -153,3 +154,5 @@ describe('createFileReceiptStore', () => {
     expect(recent[0]!.txHash).toBe('0xnew')
   })
 })
+
+receiptStoreContract('createMemoryReceiptStore — contract', () => createMemoryReceiptStore())
