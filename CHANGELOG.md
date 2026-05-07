@@ -4,6 +4,27 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.17.0
+
+Property-based tests for the policy engine.
+
+- Added `packages/core/src/engine/engine.property.test.ts` using fast-check
+- 8 property tests, 1800 random iterations total
+- Properties tested:
+  - Evaluation is deterministic — same inputs always produce same outputs
+  - checkChain always appears in checksRun
+  - Action on unlisted chain always fails with chain_not_allowed
+  - Transfer at exactly maxSpendPerTx passes spend check
+  - Transfer over maxSpendPerTx always fails with spend_exceeds_cap
+  - Swap with maxSlippage === 0 always fails with slippage_not_declared
+  - evaluate() never throws for any valid action/policy combination
+  - passed: true implies no rejectionReason; passed: false implies rejectionReason defined
+- fast-check v4 added as dev dependency in @txfence/core
+- Properties use fc.pre() for preconditions and chain() to generate actions from policies
+- Property 6 (slippage) explicitly adds the swap router to allowedContracts so the contract check passes before slippage is evaluated — correct isolation technique for property tests
+
+---
+
 ## v0.16.0
 
 Contract test suites for core interfaces and atomic checkpoint writes.
