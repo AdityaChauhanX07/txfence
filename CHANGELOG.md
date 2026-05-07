@@ -4,6 +4,29 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.18.0
+
+End-to-end treasury agent example, security model, runbook, and changesets.
+
+**Treasury agent example**
+- Added `examples/treasury-agent/` — complete end-to-end example using all 12 packages
+- `policy.ts` — realistic DAO treasury policy: 10,000 USDC per-tx cap, Uniswap V3 and 1inch V5 on allowlist, 50,000 USDC approval threshold, 100,000 USDC rolling window, 500,000 USDC absolute cap
+- `run.ts` — 5 pipeline examples in dry-run mode: small transfer, over-cap transfer, Uniswap swap, unlisted contract, high-value approval
+- `simulate-policy-change.ts` — policy diff showing blast radius of reducing maxSpendPerTx from 10,000 to 5,000 USDC
+- `monitor.ts` — live block scanner connecting to Ethereum mainnet with checkpoint persistence
+- All 5 examples produce correct expected outputs verified against a live RPC
+
+**Documentation**
+- Added `docs/security-model.md` — threat model, what txfence protects against, what it does not, webhook verification guide, audit log tamper evidence note
+- Added `docs/runbook.md` — troubleshooting guide for every PolicyRejectionReason, simulation issues, approval timeouts, monitor alerts, and common configuration mistakes
+
+**Changesets**
+- Added `@changesets/cli` for monorepo version management
+- `pnpm changeset` creates a changeset, `pnpm version-packages` bumps versions, `pnpm release` publishes
+- CONTRIBUTING.md updated with release process documentation
+
+---
+
 ## v0.17.0
 
 Property-based tests for the policy engine.
