@@ -7,3 +7,4 @@ packages:
   - "packages/monitor"
   - "examples"
   - "examples/treasury-agent"
+  - "packages/scripts"

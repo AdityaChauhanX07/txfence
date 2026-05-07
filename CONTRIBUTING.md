@@ -28,6 +28,20 @@ evm-swap.ts
 
 ## Development workflow
 
+Start the development environment (Anvil + test watcher):
+```bash
+pnpm dev
+```
+
+This starts:
+- Anvil forking Ethereum mainnet (if Foundry is installed)
+- vitest in watch mode for @txfence/core
+
+Set ETHEREUM_RPC_URL to use a specific RPC endpoint:
+```bash
+ETHEREUM_RPC_URL=https://your-rpc.com pnpm dev
+```
+
 Run all tests:
 ```bash
 pnpm test
