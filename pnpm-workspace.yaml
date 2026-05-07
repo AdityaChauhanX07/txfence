@@ -6,3 +6,4 @@ packages:
   - "packages/react"
   - "packages/monitor"
   - "examples"
+  - "examples/treasury-agent"

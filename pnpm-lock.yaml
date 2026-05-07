@@ -31,6 +31,25 @@ importers:
         specifier: ^4.0.0
         version: 4.21.0
 
+  examples/treasury-agent:
+    dependencies:
+      '@txfence/audit':
+        specifier: workspace:*
+        version: link:../../packages/audit
+      '@txfence/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@txfence/evm':
+        specifier: workspace:*
+        version: link:../../packages/evm
+      '@txfence/monitor':
+        specifier: workspace:*
+        version: link:../../packages/monitor
+    devDependencies:
+      tsx:
+        specifier: ^4.0.0
+        version: 4.21.0
+
   packages/audit:
     dependencies:
       '@txfence/core':

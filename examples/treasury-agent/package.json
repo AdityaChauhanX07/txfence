@@ -1,0 +1,15 @@
+{
+  "name": "@txfence/example-treasury",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@txfence/core": "workspace:*",
+    "@txfence/evm": "workspace:*",
+    "@txfence/audit": "workspace:*",
+    "@txfence/monitor": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}

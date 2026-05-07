@@ -144,3 +144,8 @@ vite.config.ts.timestamp-*
 
 # Project briefs
 txfence-brief.md
+
+# Treasury agent example data
+examples/treasury-agent/data/*.jsonl
+examples/treasury-agent/data/*.json
+examples/treasury-agent/data/monitor-checkpoint.json
