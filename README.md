@@ -27,6 +27,7 @@ Read the failure taxonomy: [docs/failure-taxonomy.md](docs/failure-taxonomy.md)
 | `@txfence/cosmos` | Cosmos chain adapter (Cosmos Hub, Osmosis) |
 | `@txfence/redis` | Redis-backed cap lock provider for multi-agent environments |
 | `@txfence/storage-pg` | PostgreSQL receipt storage backend |
+| `@txfence/storage-sqlite` | SQLite receipt storage backend — ideal for local development |
 | `@txfence/mcp` | MCP server exposing txfence as tools for AI assistants |
 | `@txfence/cli` | Command-line interface for policy checking, simulation, and execution |
 | `@txfence/react` | React hooks for building frontends on top of txfence agents |
@@ -356,10 +357,19 @@ function TransferButton() {
 
 ## Running the example
 
+Simple EVM swap (simulation only):
 ```bash
 pnpm install
 cd examples
 npx tsx evm-swap.ts
+```
+
+Complete treasury agent (all 12 packages):
+```bash
+cd examples/treasury-agent
+npx tsx run.ts          # dry-run pipeline demo
+npx tsx simulate-policy-change.ts  # policy diff example
+npx tsx monitor.ts      # live block scanner (requires RPC)
 ```
 
 ---
@@ -376,7 +386,8 @@ packages/cosmos       simulate, build, sign, broadcast
                       (cosmoshub + osmosis) — 10 tests
 packages/redis        Redis CapLockProvider with atomic Lua scripts
 packages/storage-pg   PostgreSQL receipt storage — 12 tests
-packages/mcp          MCP server with 5 tools — 5 tests
+packages/storage-sqlite  SQLite receipt storage — 12 tests
+packages/mcp          MCP server with 6 tools — 5 tests
 packages/cli          CLI with 6 commands — 7 tests
 packages/react        React hooks — 7 tests
 packages/audit       append-only audit log — memory + file backends — 20 tests
@@ -408,6 +419,16 @@ packages/integration  Anvil integration tests — 7 passing + 5 skipped
 - [x] Append-only audit log with policy snapshot immutability
 - [x] On-chain reconciliation monitor with checkpoint persistence
 - [x] Policy diff tool with CLI and MCP integration
+- [x] SQLite receipt storage
+- [x] Shared bigint serialization across all storage backends
+- [x] Contract test suites for all four core interfaces
+- [x] Property-based tests for policy engine (fast-check, 1800 runs)
+- [x] Architecture decision records (12 ADRs in docs/decisions/)
+- [x] Security model document
+- [x] Operational runbook
+- [x] Changesets for monorepo version management
+- [x] End-to-end treasury agent example
+- [x] pnpm dev script
 
 ---
 
