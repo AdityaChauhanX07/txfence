@@ -1,0 +1,103 @@
+---
+title: Security Model
+description: Trust boundaries, threat model, and security guarantees of the txfence SDK.
+---
+
+import { Callout } from "nextra/components";
+
+# Security Model
+
+## Trust Boundaries
+
+txfence operates within a specific trust model. Understanding what it does and does not protect against is essential for production deployments.
+
+```
+┌─────────────────────────────────────────────────────┐
+│  TRUSTED                                            │
+│  • Policy definitions (written by you)              │
+│  • txfence SDK code                                 │
+│  • Your chain adapter configuration                 │
+└─────────────────────────────────────────────────────┘
+         │ evaluated against
+         ▼
+┌─────────────────────────────────────────────────────┐
+│  UNTRUSTED                                          │
+│  • Agent outputs (LLM completions, tool calls)      │
+│  • External data (oracles, API responses)           │
+│  • User inputs fed to the agent                     │
+│  • On-chain state (contract return values)          │
+└─────────────────────────────────────────────────────┘
+```
+
+## What txfence Guarantees
+
+**Policy enforcement is synchronous and blocking.** An action cannot reach the chain unless `fence.evaluate()` returns `allowed: true`. There is no async gap between evaluation and execution — the fence holds the signing key.
+
+**Audit logs are append-only and chain-linked.** Each entry includes the SHA-256 hash of the previous entry. Deleting or modifying a historical entry invalidates all subsequent hashes, making tampering detectable.
+
+**Simulation uses a forked chain snapshot.** The simulation always forks from the latest confirmed block header. It cannot be manipulated by pending transactions or mempool state.
+
+## What txfence Does Not Guarantee
+
+<Callout type="error">
+  txfence is not a substitute for smart contract audits. It cannot prevent on-chain vulnerabilities in the contracts your agent interacts with.
+</Callout>
+
+**txfence does not protect against:**
+
+- **Compromised signing keys** — if an attacker gains access to the private key, they can bypass txfence entirely by submitting transactions directly to the RPC
+- **Malicious chain adapters** — if you supply a tampered adapter, it can return false simulation results
+- **Policy misconfiguration** — a policy with `defaults: { effect: "allow" }` will allow any action that doesn't match a deny rule
+- **MEV / sandwich attacks** — txfence evaluates the action before it hits the mempool; it cannot control execution order
+- **Smart contract exploits** — vulnerabilities in the contracts being called are outside txfence's scope
+
+## Threat Model
+
+### Prompt Injection
+
+An attacker embeds instructions in data the agent processes (a token name, a contract's `name()` return value, a DeFi protocol's description) that cause the agent to propose malicious actions.
+
+**Mitigation**: Policy rules enforce invariants regardless of why the agent proposed the action. Even if the agent is convinced to attempt a large transfer, the `value: { lte: X }` rule blocks it.
+
+### Policy Bypass via Novel Action Encoding
+
+An attacker finds an encoding of a malicious action that the parser fails to decode correctly, causing it to appear benign to the policy engine.
+
+**Mitigation**: The adapter's parser is the only trust boundary here. Review adapter code carefully. Maintain a function signature allowlist so any unrecognized call is denied by default.
+
+### Simulation Divergence
+
+The simulation returns success, but the actual on-chain execution has a different outcome (due to state changes in the same block between simulation and execution).
+
+**Mitigation**: This is a known limitation of all simulation-based approaches. Mitigate with slippage tolerance rules, idempotent action design, and monitoring for unexpected outcomes.
+
+### Audit Log Tampering
+
+An attacker with write access to the audit store attempts to delete or modify historical entries.
+
+**Mitigation**: Chain-linked SHA-256 hashes make tampering detectable. For high-assurance deployments, write audit entries to an append-only external system (e.g., a write-once S3 bucket or a public blockchain).
+
+## Key Management
+
+txfence holds the signing key for your agent's wallet. Follow these practices:
+
+1. **Use environment variables** — never hardcode private keys in policy files or source code
+2. **Use HSMs or KMS** — for production, supply an `ExternalSigner` backed by AWS KMS, GCP Cloud HSM, or a hardware wallet
+3. **Rotate keys** — if a key is suspected compromised, rotate it immediately; past audit logs remain verifiable by hash
+4. **Principle of least privilege** — fund the agent's wallet with only what it needs; keep treasury funds in a separate cold wallet
+
+```typescript
+import { KMSSigner } from "@txfence/evm/signers";
+
+const fence = createFence({
+  adapter: evmAdapter({
+    rpcUrl: process.env.RPC_URL!,
+    signer: new KMSSigner({ keyId: process.env.KMS_KEY_ID! }),
+  }),
+  policy,
+});
+```
+
+## Reporting Vulnerabilities
+
+If you discover a security vulnerability in txfence, please report it via GitHub Security Advisories rather than opening a public issue. We aim to respond within 48 hours and release a patch within 7 days for critical issues.

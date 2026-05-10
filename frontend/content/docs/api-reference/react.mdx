@@ -1,0 +1,145 @@
+---
+title: "@txfence/react"
+description: React hooks for building txfence-powered frontends.
+---
+
+import { Callout } from "nextra/components";
+
+# @txfence/react
+
+React hooks for building frontends that interact with a txfence agent.
+
+## Setup
+
+Wrap your app with `TxfenceProvider`:
+
+```tsx
+import { TxfenceProvider } from '@txfence/react'
+
+export default function App({ children }) {
+  return (
+    <TxfenceProvider agentUrl="https://your-txfence-agent.example.com">
+      {children}
+    </TxfenceProvider>
+  )
+}
+```
+
+---
+
+## `useAgent`
+
+Returns the current agent configuration and connection status.
+
+```typescript
+function useAgent(): {
+  connected: boolean;
+  policy: Policy | null;
+  chains: ChainId[];
+  error: Error | null;
+}
+```
+
+---
+
+## `useSimulate`
+
+Simulates an action without submitting it.
+
+```typescript
+function useSimulate(): {
+  simulate: (action: Action) => Promise<SimulationResult>;
+  result: SimulationResult | null;
+  loading: boolean;
+  error: Error | null;
+}
+```
+
+```tsx
+function TransferPreview({ action }: { action: TransferAction }) {
+  const { simulate, result, loading } = useSimulate()
+
+  useEffect(() => {
+    simulate(action)
+  }, [action])
+
+  if (loading) return <Spinner />
+  if (result?.wouldRevert) return <Alert>This transfer would fail: {result.revertReason}</Alert>
+  return <GasEstimate value={result?.gasEstimate} />
+}
+```
+
+---
+
+## `useSubmit`
+
+Submits an action through the full txfence pipeline.
+
+```typescript
+function useSubmit(): {
+  submit: (action: Action, options?: { dryRun?: boolean }) => Promise<PipelineResult>;
+  result: PipelineResult | null;
+  loading: boolean;
+  error: Error | null;
+  reset: () => void;
+}
+```
+
+<Callout type="info">
+  `dryRun: true` by default. Pass `dryRun: false` to execute on-chain after the user confirms.
+</Callout>
+
+---
+
+## `useReceipt`
+
+Fetches a stored receipt by transaction hash.
+
+```typescript
+function useReceipt(txHash: string | null): {
+  receipt: SuccessReceipt | null;
+  loading: boolean;
+  error: Error | null;
+}
+```
+
+---
+
+## Example: `TransferButton`
+
+```tsx
+import { useSubmit } from '@txfence/react'
+import type { TransferAction } from '@txfence/core'
+
+export function TransferButton({ to, amount }: { to: string; amount: bigint }) {
+  const { submit, result, loading } = useSubmit()
+
+  const action: TransferAction = {
+    kind: 'transfer',
+    chain: 'ethereum',
+    token: { token: 'ETH', amount, decimals: 18 },
+    to,
+  }
+
+  const handleClick = async () => {
+    // First: dry run
+    const preview = await submit(action, { dryRun: true })
+    if (preview.status !== 'success') {
+      console.error('Would fail:', preview)
+      return
+    }
+    // Then: execute
+    await submit(action, { dryRun: false })
+  }
+
+  if (result?.status === 'success') {
+    return <p>Sent! Tx: {result.receipt.txHash}</p>
+  }
+
+  return (
+    <button onClick={handleClick} disabled={loading}>
+      {loading ? 'Sending...' : 'Send ETH'}
+    </button>
+  )
+}
+```

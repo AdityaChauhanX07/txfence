@@ -1,0 +1,9 @@
+{
+  "core": "@txfence/core",
+  "evm": "@txfence/evm",
+  "solana": "@txfence/solana",
+  "cosmos": "@txfence/cosmos",
+  "mcp": "@txfence/mcp",
+  "cli": "@txfence/cli",
+  "react": "@txfence/react"
+}

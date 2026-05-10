@@ -1,0 +1,227 @@
+---
+title: Runbook
+description: Operational procedures for deploying, monitoring, and responding to incidents with txfence.
+---
+
+import { Steps, Callout, Tabs } from "nextra/components";
+
+# Runbook
+
+This runbook covers the operational procedures for teams running txfence in production.
+
+---
+
+## Pre-Deployment Checklist
+
+Before deploying an agent to production, verify:
+
+- [ ] Policy has `defaults: { effect: "deny" }` (not allow)
+- [ ] All action types the agent might use are explicitly covered by a rule
+- [ ] Rate limits are configured (`@txfence/rate-limiter`)
+- [ ] Circuit breaker is configured (`@txfence/circuit-breaker`)
+- [ ] Audit log is configured with a persistent store (not in-memory)
+- [ ] Signing key is in an HSM or KMS (not a plaintext env var in CI)
+- [ ] A separate cold wallet holds the treasury; the agent wallet holds a working balance only
+- [ ] Policy has been tested with `fence.evaluate(action, { dryRun: true })` against representative actions
+- [ ] An alert is configured for `onViolation` events
+
+---
+
+## Monitoring
+
+### Key Metrics
+
+| Metric | Alert Threshold | Meaning |
+|---|---|---|
+| `violations_per_minute` | > 10 | Agent is repeatedly proposing blocked actions |
+| `circuit_breaker_trips` | > 0 | Consecutive failures detected; agent halted |
+| `simulation_failures` | > 5% | RPC or chain instability |
+| `audit_log_write_errors` | > 0 | Audit store unavailable |
+| `p99_evaluate_latency_ms` | > 500ms | Policy evaluation is a bottleneck |
+
+### Setting Up Alerts
+
+```typescript
+const fence = createFence({
+  adapter,
+  policy,
+  onViolation: (violation) => {
+    metrics.increment("txfence.violations", {
+      rule: violation.ruleId,
+      action: violation.action.type,
+    });
+
+    if (violation.type === "circuit-breaker-trip") {
+      pagerduty.trigger({
+        summary: `txfence circuit breaker tripped: ${violation.reason}`,
+        severity: "critical",
+      });
+    }
+  },
+});
+```
+
+---
+
+## Incident Response
+
+### Agent Is Blocked (Circuit Breaker Tripped)
+
+<Steps>
+
+### Identify the trigger
+
+Check the audit log for the consecutive failures that triggered the trip:
+
+```typescript
+const recentEntries = await auditLog.query({
+  limit: 20,
+  order: "desc",
+});
+const failures = recentEntries.filter(e => !e.result.allowed);
+console.log(failures.map(f => f.result.violations));
+```
+
+### Determine if the block is correct
+
+Review the blocked actions. Ask:
+- Is this a legitimate action the agent should be taking?
+- Is this a symptom of a bug in the agent's logic?
+- Is this an attack?
+
+### Reset the circuit breaker (if appropriate)
+
+```typescript
+fence.getPlugin("circuit-breaker").reset();
+```
+
+<Callout type="warning">
+  Only reset the circuit breaker after you understand why it tripped. Resetting without investigation defeats the purpose.
+</Callout>
+
+### Update policy if needed
+
+If the circuit breaker tripped because of a legitimate new action type the policy didn't account for, update the policy rules before resetting.
+
+</Steps>
+
+---
+
+### Suspicious Transactions Detected
+
+<Steps>
+
+### Halt the agent immediately
+
+```typescript
+fence.getPlugin("circuit-breaker").trip("manual-halt");
+```
+
+Or kill the agent process and remove its signing key from the environment.
+
+### Review audit log
+
+The audit log has a complete record of every action the agent proposed and whether it was allowed:
+
+```typescript
+const entries = await auditLog.query({
+  fromTimestamp: suspicionStartTime,
+  allowed: true,  // only executed transactions
+});
+```
+
+### Verify on-chain
+
+Cross-reference the audit log transaction hashes with an explorer. The audit log records what txfence submitted; the explorer confirms what the chain accepted.
+
+### Rotate the signing key
+
+Even if the agent was not compromised, rotate the key as a precaution:
+
+```bash
+# Generate new key
+cast wallet new
+
+# Update environment
+export AGENT_PRIVATE_KEY=0xNewKey...
+
+# Restart agent
+```
+
+</Steps>
+
+---
+
+## Policy Updates
+
+### Zero-Downtime Policy Update
+
+txfence supports live context updates without restarting:
+
+```typescript
+// Update the allowlist without restarting the fence
+fence.updateContext({
+  allowlist: [...currentAllowlist, "0xNewAddress"],
+});
+```
+
+For policy rule changes (not just context), you must restart the fence with the new policy. Use a blue-green deployment:
+
+1. Start a new fence instance with the updated policy
+2. Drain the old instance (wait for in-flight actions to complete)
+3. Switch traffic to the new instance
+4. Shut down the old instance
+
+### Testing a Policy Change
+
+Always test against production-representative actions in dry-run mode before deploying:
+
+```typescript
+const testActions = loadTestFixtures("./fixtures/prod-sample.json");
+
+for (const action of testActions) {
+  const result = await fence.evaluate(action, { dryRun: true });
+  console.log(action.id, result.allowed, result.violations);
+}
+```
+
+---
+
+## Audit Log Verification
+
+Verify the integrity of the audit log at any time:
+
+```typescript
+import { verifyAuditLog } from "@txfence/audit-log";
+
+const result = await verifyAuditLog(auditLog);
+if (!result.valid) {
+  console.error("Audit log tampered at entry:", result.firstInvalidEntry);
+}
+```
+
+Run this check:
+- After any incident
+- Before using audit logs as evidence in a dispute
+- As a weekly scheduled job for compliance
+
+---
+
+## Upgrading txfence
+
+<Callout type="info">
+  txfence follows semver. Minor and patch releases are backward compatible. Major releases may require policy config changes — check the CHANGELOG.
+</Callout>
+
+```bash
+# Check current version
+pnpm list @txfence/core
+
+# Upgrade
+pnpm update @txfence/core @txfence/evm
+
+# Verify no breaking changes
+pnpm test
+```
+
+After upgrading, run your policy test suite and verify the audit log verification still passes before deploying to production.

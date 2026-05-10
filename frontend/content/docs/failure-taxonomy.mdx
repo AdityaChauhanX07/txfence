@@ -1,0 +1,115 @@
+---
+title: Failure Taxonomy
+description: The eight categories of autonomous agent failures that txfence is designed to prevent.
+---
+
+import { Callout } from "nextra/components";
+
+# Failure Taxonomy
+
+Autonomous agents fail in ways that are qualitatively different from human operators. This page catalogs the eight failure modes txfence is designed to prevent, with examples and the specific policy primitives that address each one.
+
+---
+
+## 1. Value Extraction
+
+**What it is**: The agent transfers significantly more value than intended — either due to a prompt injection attack, a manipulated oracle, or a reasoning error in the agent's decision-making loop.
+
+**Example**: A treasury management agent is instructed to "rebalance the portfolio" but interprets this as transferring the entire balance to a single address.
+
+**txfence mitigations**:
+- `value: { lte: "1000000000000000000" }` — hard cap per transaction
+- `@txfence/rate-limiter` — daily/hourly value limits
+- `@txfence/circuit-breaker` — halt after N consecutive large transfers
+
+---
+
+## 2. Reentrancy Exploitation
+
+**What it is**: A malicious contract calls back into the agent's execution context mid-transaction, causing it to take actions it wasn't authorized to take.
+
+**Example**: An agent calls a DeFi protocol that, during execution, triggers a callback that calls the agent again with a different (attacker-controlled) context.
+
+**txfence mitigations**:
+- Simulation stage catches reentrancy reverts before execution
+- `stateChanges` inspection can flag unexpected cross-contract calls
+- Contract allowlisting prevents calls to unknown addresses
+
+---
+
+## 3. Approval Drain
+
+**What it is**: The agent grants an ERC-20 `approve()` with an unlimited allowance to a contract that later drains the approved balance.
+
+**Example**: An agent approves a DEX router for `type(uint256).max` tokens. The router is later exploited or upgraded to a malicious implementation.
+
+**txfence mitigations**:
+- Policy rule: `match: { action: "approve" }, condition: { amount: { lte: swapAmount } }` — limit approvals to the exact required amount
+- Block `approve` to non-allowlisted contracts entirely
+
+---
+
+## 4. Oracle Manipulation
+
+**What it is**: A price oracle is manipulated (e.g., via flash loan) so the agent's valuation is incorrect, causing it to make trades that appear valid but are economically harmful.
+
+**Example**: An arbitrage agent sees an artificial price discrepancy created by an attacker and executes a trade that results in a net loss.
+
+**txfence mitigations**:
+- Simulation-based slippage checks: deny if simulated output deviates from expected by more than X%
+- Secondary oracle validation via `context` variables
+
+---
+
+## 5. Privilege Escalation
+
+**What it is**: The agent calls a contract function it should not have access to — an admin function, an upgrade mechanism, or a cross-chain bridge with elevated permissions.
+
+**Example**: A DeFi agent discovers it holds an admin key in its wallet and calls `transferOwnership()` on a protocol contract.
+
+**txfence mitigations**:
+- Function signature allowlist: `functionSigs: ["transfer(address,uint256)", "swap(...)"]`
+- Explicit deny for known admin function signatures
+
+<Callout type="warning">
+  Privilege escalation is especially dangerous because the effects may be irreversible (contract ownership, proxy upgrades). Use explicit function-level allowlists rather than relying on deny rules for this category.
+</Callout>
+
+---
+
+## 6. Cross-Chain Contagion
+
+**What it is**: An action on one chain triggers automatic downstream actions on another chain via a bridge or IBC relay, amplifying the damage beyond what the original policy covered.
+
+**Example**: An agent sends tokens over a bridge. The bridge contract, on receipt, automatically executes a swap on the destination chain that the policy never evaluated.
+
+**txfence mitigations**:
+- Simulation traces include bridge call analysis
+- Separate policy instances per chain, each with independent limits
+- `@txfence/cosmos` IBC adapter evaluates cross-chain messages explicitly
+
+---
+
+## 7. State Drift
+
+**What it is**: The agent's internal model of world state diverges from actual on-chain state, causing it to make decisions based on stale or incorrect information.
+
+**Example**: An agent believes a lending position is healthy but the position was liquidated in a previous block. It continues adding collateral to a position that no longer exists.
+
+**txfence mitigations**:
+- Simulation always forks from the latest confirmed block
+- `stateChanges` from simulation are fed back into the agent's context
+- `@txfence/monitor` can alert when on-chain state deviates from expected
+
+---
+
+## 8. Runaway Loop
+
+**What it is**: A bug in the agent's decision loop causes it to repeatedly execute the same action — draining gas, triggering rate limits at external protocols, or filling storage.
+
+**Example**: An agent retries a failed transaction indefinitely, sending thousands of identical transactions and exhausting the wallet's ETH balance in gas.
+
+**txfence mitigations**:
+- `@txfence/rate-limiter` with `maxCount` window: cap total actions per hour
+- `@txfence/circuit-breaker` with `consecutiveFailures` threshold: halt after N failures
+- Action deduplication: deny exact-duplicate transactions within a time window

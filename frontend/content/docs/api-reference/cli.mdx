@@ -1,0 +1,106 @@
+---
+title: "@txfence/cli"
+description: Command-line interface for txfence.
+---
+
+# @txfence/cli
+
+Command-line interface for txfence. Install globally or use via `npx`.
+
+```bash
+npm install -g @txfence/cli
+# or: npx txfence <command>
+```
+
+---
+
+## `txfence init`
+
+Generates a `txfence.config.ts` in the current directory with sensible defaults.
+
+```bash
+txfence init [--chain ethereum|arbitrum|solana|cosmoshub]
+```
+
+**Output:** `txfence.config.ts` with a base policy configured for the specified chain.
+
+---
+
+## `txfence simulate`
+
+Runs simulation for an action defined in a config or inline JSON.
+
+```bash
+txfence simulate \
+  --action '{"kind":"transfer","chain":"ethereum","token":{"token":"ETH","amount":"100000000000000000","decimals":18},"to":"0x..."}' \
+  --config ./txfence.config.ts
+```
+
+**Output:** Simulation result with gas estimate, coverage level, caveats, and whether it would revert.
+
+---
+
+## `txfence check-policy`
+
+Evaluates an action against the policy without any RPC calls.
+
+```bash
+txfence check-policy \
+  --action '{"kind":"transfer",...}' \
+  --config ./txfence.config.ts
+```
+
+**Output:** Pass/fail with the specific check that failed and rejection reason if applicable.
+
+---
+
+## `txfence submit`
+
+Runs the full pipeline. Defaults to dry-run — add `--execute` to broadcast on-chain.
+
+```bash
+txfence submit \
+  --action '{"kind":"transfer",...}' \
+  --config ./txfence.config.ts \
+  [--execute]
+```
+
+**Without `--execute`:** Runs policy check + simulation + prints what would happen.
+
+**With `--execute`:** Runs the full pipeline including signing and broadcasting. Requires `PRIVATE_KEY` in env.
+
+---
+
+## `txfence receipt`
+
+Fetches a stored receipt by transaction hash.
+
+```bash
+txfence receipt --tx 0x1234...abcd --config ./txfence.config.ts
+```
+
+**Output:** Full receipt JSON including action, evaluation, simulation result, and block confirmation.
+
+---
+
+## `txfence diff`
+
+Computes the blast radius of a policy change.
+
+```bash
+txfence diff --before ./policy-v1.ts --after ./policy-v2.ts
+```
+
+**Output:** Field-by-field diff with whether each change is more or less restrictive. Use this in CI to require review for policy changes.
+
+---
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `PRIVATE_KEY` | Hex private key for `txfence submit --execute` |
+| `TXFENCE_CONFIG` | Default config file path (overridden by `--config`) |
+| `TENDERLY_ACCESS_KEY` | Enables deep simulation when set |
+| `TENDERLY_ACCOUNT` | Tenderly account slug |
+| `TENDERLY_PROJECT` | Tenderly project slug |

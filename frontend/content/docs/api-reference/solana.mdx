@@ -1,0 +1,101 @@
+---
+title: "@txfence/solana"
+description: Solana chain adapter with SPL token support.
+---
+
+import { Callout } from "nextra/components";
+
+# @txfence/solana
+
+Solana chain adapter with SPL token support and explicit account model semantics.
+
+## `simulateSolanaAction`
+
+Pre-flight simulation using `simulateTransaction`. Returns `coverageLevel: 'basic'`.
+
+```typescript
+async function simulateSolanaAction(
+  action: Action,
+  chainId: 'solana',
+  rpcUrl: string
+): Promise<SimulationResult>
+```
+
+<Callout type="warning">
+  Solana simulation includes `blockhash_may_expire` in `caveats`. The recent blockhash used during simulation has a limited validity window — transactions must be broadcast promptly after simulation.
+</Callout>
+
+### Solana-specific caveats
+
+| Caveat | Meaning |
+|---|---|
+| `state_may_diverge` | Account state can change between simulation and slot landing |
+| `blockhash_may_expire` | Recent blockhash expires after ~90 seconds |
+| `compute_budget_approximate` | Compute unit estimate is a simulation-time figure |
+
+---
+
+## `executeSolanaAction`
+
+Signs and sends a Solana transaction after policy evaluation passes.
+
+```typescript
+async function executeSolanaAction(
+  action: Action,
+  chainId: 'solana',
+  rpcUrl: string,
+  keypair: Keypair,
+  evaluation: PolicyEvaluation,
+  simulation?: SimulationResult
+): Promise<SuccessReceipt>
+```
+
+---
+
+## `buildSolanaTransaction`
+
+Constructs an unsigned `Transaction` or `VersionedTransaction` from a txfence `Action`.
+
+```typescript
+async function buildSolanaTransaction(
+  action: Action,
+  rpcUrl: string,
+  payer: PublicKey
+): Promise<Transaction | VersionedTransaction>
+```
+
+Handles:
+- Native SOL transfers (`SystemProgram.transfer`)
+- SPL token transfers (`spl-token` `createTransferInstruction`)
+- Compute budget (`ComputeBudgetProgram.setComputeUnitLimit`)
+
+---
+
+## `createSolanaKeypairSigner`
+
+Creates a signer from a `Keypair`. For production, use a hardware wallet or KMS-backed signer.
+
+```typescript
+function createSolanaKeypairSigner(keypair: Keypair): SolanaSigner
+```
+
+---
+
+## SPL Token support
+
+The Solana adapter normalizes SPL token amounts to the token's native decimal representation. When constructing a `TransferAction` for USDC on Solana:
+
+```typescript
+const action: TransferAction = {
+  kind: 'transfer',
+  chain: 'solana',
+  token: {
+    token: 'USDC',
+    amount: 1_000_000n,   // 1 USDC = 1,000,000 (6 decimals)
+    decimals: 6,
+  },
+  to: 'RecipientPublicKey...',
+}
+```
+
+The adapter resolves the associated token account for the recipient automatically.

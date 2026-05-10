@@ -1,0 +1,137 @@
+---
+title: Architecture
+description: How txfence's five-stage pipeline and plugin system are structured internally.
+---
+
+# Architecture
+
+## Overview
+
+txfence is structured as a **middleware pipeline** that sits between your agent and the blockchain. Every action proposal flows through a fixed sequence of stages before it is allowed to touch chain state.
+
+```
+Agent
+  │
+  ▼
+┌─────────────────────────────────────────────┐
+│                   Fence                      │
+│                                             │
+│  Parse → Simulate → Evaluate → Audit → Exec │
+│                                             │
+└─────────────────────────────────────────────┘
+  │
+  ▼
+Chain (EVM / Solana / Cosmos)
+```
+
+## Stage Details
+
+### Parse
+
+The raw action — an unsigned transaction object, a Solana instruction, or a Cosmos `Any` message — is decoded by the **chain adapter** into a normalized `ActionIntent`. This is the canonical representation the rest of the pipeline works with.
+
+Each adapter knows how to:
+- Decode calldata using the contract's ABI
+- Resolve token addresses to human-readable symbols
+- Normalize value fields to base units (wei, lamports, uatom)
+
+### Simulate
+
+The normalized action is executed against a **forked snapshot** of the current chain state. The fork is created by the adapter using the RPC's debug/tracing APIs (e.g., `eth_call` with state overrides on EVM, `simulateTransaction` on Solana).
+
+Simulation surfaces:
+- Whether the transaction would revert and why
+- The gas estimate
+- All state changes (balance diffs, storage writes, event logs)
+- Downstream effects (e.g., a DEX swap producing slippage)
+
+Policy conditions can reference simulation results, enabling rules like "deny if gas estimate exceeds 500k" or "deny if the swap produces more than 5% slippage."
+
+### Evaluate
+
+The policy engine walks `policy.rules` in order. For each rule:
+
+1. The `match` clause is tested against the `ActionIntent` type fields
+2. If the match passes, the `condition` is evaluated against the full context (action + simulation + user-supplied context variables)
+3. If the condition passes, the rule's `effect` is applied and evaluation stops
+
+If no rule matches, `policy.defaults.effect` is applied.
+
+The engine is **pure** — it takes inputs and returns a result with no side effects. This makes it easy to unit-test policies in isolation:
+
+```typescript
+import { evaluatePolicy } from "@txfence/core/eval";
+
+const result = evaluatePolicy(policy, actionIntent, context);
+expect(result.allowed).toBe(false);
+```
+
+### Audit
+
+An `AuditEntry` is written to the configured store after every evaluation. Entries are **chain-linked** — each entry includes the SHA-256 hash of the previous entry — so any tampering with a historical entry invalidates all subsequent entries.
+
+The default store is in-memory. For production use, configure the `fs` store (append-only NDJSON file) or implement the `AuditStore` interface to write to a database or external logging service.
+
+### Execute
+
+If `allowed === true`, the fence calls `adapter.submit(signedTx)`. The adapter handles:
+- Signing with the configured key or external signer
+- Nonce management and gas estimation
+- Retry logic on transient RPC failures
+- Transaction receipt polling
+
+The resulting transaction hash is appended to the audit entry.
+
+## Plugin System
+
+Plugins extend the pipeline by registering **hooks** at specific stages:
+
+```typescript
+interface Plugin {
+  name: string;
+  onParse?: (intent: ActionIntent) => ActionIntent | Promise<ActionIntent>;
+  onSimulate?: (result: SimulationResult) => SimulationResult | Promise<SimulationResult>;
+  onEvaluate?: (result: EvalResult) => EvalResult | Promise<EvalResult>;
+  onAudit?: (entry: AuditEntry) => void | Promise<void>;
+  onExecute?: (receipt: TransactionReceipt) => void | Promise<void>;
+}
+```
+
+Built-in plugins (`@txfence/rate-limiter`, `@txfence/allowlist`, `@txfence/circuit-breaker`, `@txfence/multisig`) all use the `onEvaluate` hook to inject additional deny decisions into the result.
+
+Plugins are applied in the order they are passed to `createFence`:
+
+```typescript
+const fence = createFence({
+  adapter,
+  policy,
+  plugins: [
+    rateLimiter({ windows: [{ duration: 3600_000, maxValue: 10n ** 19n }] }),
+    circuitBreaker({ tripOn: [{ consecutiveFailures: 3 }] }),
+    allowlist({ addresses: APPROVED }),
+  ],
+});
+```
+
+## Chain Adapters
+
+Adapters implement the `ChainAdapter` interface:
+
+```typescript
+interface ChainAdapter {
+  chain: ChainId;
+  parse(raw: RawAction): Promise<ActionIntent>;
+  simulate(intent: ActionIntent): Promise<SimulationResult>;
+  submit(intent: ActionIntent): Promise<TransactionReceipt>;
+}
+```
+
+You can implement a custom adapter for any chain or execution environment (e.g., a local Hardhat node for testing).
+
+## Deployment Topologies
+
+**In-process** (default): The fence runs in the same Node.js process as the agent. Zero network latency, suitable for most use cases.
+
+**Sidecar**: Run `@txfence/server` as a separate process and call it over HTTP/gRPC. Useful when the agent is written in a language other than JavaScript.
+
+**Proxy**: Route raw RPC calls through `@txfence/proxy`, which intercepts `eth_sendRawTransaction` and evaluates the policy before forwarding. Requires no changes to the agent's code.

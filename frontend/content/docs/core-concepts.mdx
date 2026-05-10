@@ -1,0 +1,139 @@
+---
+title: Core Concepts
+description: The policy object, action types, evaluation pipeline, and key primitives in txfence.
+---
+
+import { Callout } from "nextra/components";
+
+# Core Concepts
+
+## The Policy Object
+
+A policy is a typed configuration object that declares what an agent is allowed to do.
+
+```typescript
+interface Policy {
+  id: string;           // unique identifier
+  version: string;      // semver, used for audit logs
+  rules: Rule[];        // evaluated top-to-bottom, first match wins
+  defaults: {
+    effect: "allow" | "deny";  // what to do if no rule matches
+  };
+}
+```
+
+### Rules
+
+Each rule has a **match** clause (which actions it applies to) and a **condition** (the constraint to evaluate). If the condition passes, the rule's `effect` is applied. If `effect` is omitted, it defaults to `"allow"`.
+
+```typescript
+interface Rule {
+  id: string;
+  description?: string;
+  match: MatchClause;
+  condition?: Condition;
+  effect?: "allow" | "deny";  // default: "allow"
+}
+```
+
+Rules are evaluated **in order**. The first rule whose `match` and `condition` both pass determines the outcome. If no rule matches, the policy `defaults.effect` is used.
+
+<Callout type="warning">
+  Always set `defaults.effect: "deny"` for production agents. Allowing by default creates an open door for action types you forgot to enumerate.
+</Callout>
+
+## Action Types
+
+txfence normalizes every chain operation into one of five action types:
+
+| Action | Description |
+|---|---|
+| `transfer` | Send native tokens or fungible assets to an address |
+| `approve` | Grant a spender allowance over an asset |
+| `call` | Invoke an arbitrary contract function |
+| `deploy` | Deploy a new contract |
+| `sign` | Sign a message or typed data (EIP-712) |
+
+The raw chain transaction is decoded into an `ActionIntent` before policy evaluation:
+
+```typescript
+interface ActionIntent {
+  type: "transfer" | "approve" | "call" | "deploy" | "sign";
+  chain: ChainId;
+  from: Address;
+  to?: Address;
+  value?: bigint;       // native token amount in base units
+  asset?: Address;      // ERC-20 / SPL token address
+  data?: Hex;           // calldata (call/deploy)
+  functionSig?: string; // decoded function signature
+  args?: unknown[];     // decoded function arguments
+}
+```
+
+## The Evaluation Pipeline
+
+Every proposed action passes through five ordered stages:
+
+### 1. Parse
+
+The raw action (RLP-encoded transaction, Solana instruction, Cosmos `MsgSend`, etc.) is decoded into a normalized `ActionIntent`. Chain adapters provide this parsing logic.
+
+### 2. Simulate
+
+The action is executed against a **forked snapshot** of current chain state. This catches reverts, insufficient balances, and reentrancy scenarios without spending gas or mutating state.
+
+```typescript
+const simulation = await fence.simulate(action);
+// simulation.success, simulation.gasEstimate, simulation.stateChanges
+```
+
+### 3. Evaluate
+
+Policy rules are tested in order against the `ActionIntent` and the simulation result. Conditions can reference:
+
+- Action fields (`value`, `to`, `functionSig`, …)
+- Simulation outputs (`stateChanges`, `gasEstimate`)
+- Context variables (`$allowlist`, `$rateLimit`, …)
+
+The first matching rule's effect is applied. Unmatched actions fall through to `defaults.effect`.
+
+### 4. Audit
+
+A structured log entry is written **regardless of outcome** — pass or fail. Log entries include:
+
+- The full `ActionIntent`
+- Every rule that was evaluated and its outcome
+- The final decision (`allowed: true/false`)
+- A SHA-256 hash of the previous entry (chain linking)
+
+### 5. Execute
+
+If and only if `allowed === true`, the signed transaction is submitted to the chain via the adapter's RPC connection. The transaction hash is appended to the audit log entry.
+
+## Context Variables
+
+Policies can reference dynamic values via **context variables** prefixed with `$`. You supply context when creating the fence:
+
+```typescript
+const fence = createFence({
+  adapter,
+  policy,
+  context: {
+    allowlist: ["0xAbc...", "0xDef..."],
+    dailyLimit: 5n * 10n ** 18n,  // 5 ETH
+  },
+});
+```
+
+Inside a rule condition, reference them as `"$allowlist"` or `"$dailyLimit"`. The policy engine resolves them at evaluation time, so you can update context between calls without redefining the policy.
+
+## Dry Run Mode
+
+Pass `{ dryRun: true }` to `fence.evaluate()` to run the full pipeline — including simulation and policy evaluation — without writing to the audit log or executing on-chain:
+
+```typescript
+const result = await fence.evaluate(action, { dryRun: true });
+console.log(result.allowed, result.violations);
+```
+
+This is useful for testing policies without side effects.

@@ -1,0 +1,157 @@
+---
+title: "@txfence/evm"
+description: EVM chain adapter supporting Ethereum, Arbitrum, Optimism, and Base.
+---
+
+import { Callout } from "nextra/components";
+
+# @txfence/evm
+
+EVM chain adapter supporting Ethereum, Arbitrum, Optimism, Base, and any EVM-compatible chain.
+
+## `simulateEvmAction`
+
+Pre-flight simulation via `eth_call`. Returns a `SimulationResult` with `coverageLevel: 'basic'`.
+
+```typescript
+async function simulateEvmAction(
+  action: Action,
+  chainId: ChainId,
+  rpcUrl: string
+): Promise<SimulationResult>
+```
+
+### `SimulationResult`
+
+```typescript
+interface SimulationResult {
+  success: boolean;
+  wouldRevert: boolean;
+  revertReason?: string;
+  gasEstimate: bigint;
+  gasBufferApplied: number;
+  coverageLevel: 'basic' | 'deep';
+  caveats: SimulationCaveat[];
+}
+
+type SimulationCaveat =
+  | 'state_may_diverge'
+  | 'mev_possible'
+  | 'gas_estimate_approximate'
+  | 'proxy_implementation_unverified';
+```
+
+`state_may_diverge` is always present — this is honest about what simulation covers.
+
+---
+
+## `simulateWithTenderly`
+
+Deep simulation using the Tenderly Simulation API. Returns `coverageLevel: 'deep'` with full call traces and state diffs.
+
+```typescript
+async function simulateWithTenderly(
+  action: Action,
+  chainId: ChainId,
+  rpcUrl: string,
+  config: TenderlyConfig
+): Promise<SimulationResult>
+```
+
+### `TenderlyConfig`
+
+```typescript
+interface TenderlyConfig {
+  accountSlug: string;
+  projectSlug: string;
+  accessKey: string;
+  saveSimulation?: boolean;
+}
+```
+
+<Callout type="info">
+  Tenderly simulation provides full call traces, state diffs, and decoded event logs. Use it for high-value transactions where `eth_call` coverage isn't sufficient.
+</Callout>
+
+---
+
+## `executeEvmAction`
+
+Composes build, sign, and broadcast into a single function. This is the standard executor for EVM agents.
+
+```typescript
+async function executeEvmAction(
+  action: Action,
+  chainId: ChainId,
+  rpcUrl: string,
+  signer: EvmSigner,
+  evaluation: PolicyEvaluation,
+  simulation?: SimulationResult
+): Promise<SuccessReceipt>
+```
+
+**Usage with `createAgent`:**
+
+```typescript
+const agent = createAgent(
+  config,
+  { ethereum: { simulate: simulateEvmAction } },
+  { ethereum: 'https://ethereum.publicnode.com' },
+  (action, chainId, rpcUrl, evaluation, simulation) =>
+    executeEvmAction(action, chainId, rpcUrl, signer, evaluation, simulation)
+)
+```
+
+---
+
+## `buildEvmTransaction`
+
+Constructs an unsigned `SerializedTransaction` from a txfence `Action`. Called internally by `executeEvmAction` but exposed for custom signing flows.
+
+```typescript
+async function buildEvmTransaction(
+  action: Action,
+  chainId: ChainId,
+  rpcUrl: string
+): Promise<SerializedTransaction>
+```
+
+---
+
+## `privateKeySigner`
+
+Development signer using viem's wallet client. **Not for production** — use an HSM or KMS in production.
+
+```typescript
+function privateKeySigner(privateKey: `0x${string}`): EvmSigner
+```
+
+```typescript
+const signer = privateKeySigner(process.env.PRIVATE_KEY as `0x${string}`)
+```
+
+---
+
+## `createEvmMetadataVerifier`
+
+Verifies contract metadata before signing. Used to detect upgrades, ownership transfers, or self-destructs since the allowlist entry was created.
+
+```typescript
+function createEvmMetadataVerifier(options: {
+  rpcUrl: string;
+}): MetadataVerifier
+```
+
+### `AllowedContract` with metadata
+
+```typescript
+interface AllowedContract {
+  address: string;
+  chain: ChainId;
+  bytecodeHash?: string;    // keccak256 of deployed bytecode
+  ownerAddress?: string;    // expected owner() return value
+  expiresAt?: Date;         // force periodic review
+}
+```
+
+When `bytecodeHash` is set, txfence calls `eth_getCode` before signing and compares. A mismatch rejects the action with `bytecode_hash_mismatch`.

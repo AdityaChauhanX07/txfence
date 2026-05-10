@@ -1,0 +1,223 @@
+---
+title: "@txfence/core"
+description: Policy engine, agent orchestration, cap locking, receipt storage, and webhook approval.
+---
+
+import { Callout } from "nextra/components";
+
+# @txfence/core
+
+Policy engine, agent orchestration, cap locking, receipt storage, and webhook approval. This is the only required package — all other packages plug into it.
+
+## `createAgent`
+
+Creates a policy-gated agent instance. This is the main entry point for most txfence integrations.
+
+```typescript
+function createAgent(
+  config: AgentConfig,
+  adapters: Record<ChainId, ChainAdapter>,
+  rpcUrls: Record<ChainId, string>,
+  executor: Executor,
+  options?: AgentOptions
+): Agent
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `config` | `AgentConfig` | Yes | Policy and signer configuration |
+| `adapters` | `Record<ChainId, ChainAdapter>` | Yes | Simulation adapters per chain |
+| `rpcUrls` | `Record<ChainId, string>` | Yes | RPC endpoint URLs per chain |
+| `executor` | `Executor` | Yes | Function that signs and broadcasts |
+| `options.capLockProvider` | `CapLockProvider` | No | For multi-agent spend cap enforcement |
+| `options.receiptStore` | `ReceiptStore` | No | Persists execution receipts |
+| `options.approvalProvider` | `ApprovalProvider` | No | Human-in-the-loop approvals |
+| `options.auditLog` | `AuditLog` | No | Append-only decision log |
+
+### Returns
+
+An `Agent` object with a `submit(request)` method.
+
+---
+
+## `runPipeline`
+
+The core pipeline function. Runs policy evaluation → simulation → human approval → execution for a single action.
+
+```typescript
+async function runPipeline(
+  action: Action,
+  policy: Policy,
+  adapter: ChainAdapter,
+  rpcUrl: string,
+  executor: Executor,
+  options?: PipelineOptions
+): Promise<PipelineResult>
+```
+
+### Pipeline stages
+
+1. **Policy evaluation** — runs all 6 policy checks against the action and policy
+2. **Simulation** — if `requireSimulation: true`, runs `adapter.simulate()` and checks coverage
+3. **Human approval** — if spend ≥ `humanApprovalThreshold`, dispatches webhook and waits
+4. **Execution** — calls `executor(action, ...)` to sign and broadcast
+
+### `PipelineResult` status values
+
+| Status | Meaning |
+|---|---|
+| `success` | Transaction confirmed; receipt available |
+| `policy_rejected` | Failed a policy check; `evaluation.rejectionReason` set |
+| `simulation_failed` | Simulation returned `success: false` |
+| `approval_pending` | Waiting for human approval |
+| `approval_timeout` | Approval window expired; transaction dropped |
+| `execution_failed` | Executor threw; `reason` string available |
+
+---
+
+## `Policy` type
+
+```typescript
+interface Policy {
+  chains: ChainId[];
+  maxSpendPerTx: TokenAmount;
+  allowedContracts: AllowedContract[];
+  requireSimulation: boolean;
+  gasBufferMultiplier: number;
+  humanApprovalThreshold: TokenAmount;
+  humanApprovalTimeoutMs: number;
+  capLockMode?: 'per-agent' | 'shared';
+}
+```
+
+| Field | Description |
+|---|---|
+| `chains` | Which chains this agent may transact on |
+| `maxSpendPerTx` | Maximum spend per single transaction |
+| `allowedContracts` | Contract allowlist; empty means no contract calls allowed |
+| `requireSimulation` | Block execution if simulation was not run or failed |
+| `gasBufferMultiplier` | Minimum gas buffer (e.g., `1.2` = 20% above estimate) |
+| `humanApprovalThreshold` | Spend at or above this requires explicit human approval |
+| `humanApprovalTimeoutMs` | Cancel-on-timeout window (default 30,000 ms) |
+| `capLockMode` | `'per-agent'` uses in-memory lock; `'shared'` requires a `CapLockProvider` |
+
+---
+
+## `Action` types
+
+### `TransferAction`
+
+```typescript
+interface TransferAction {
+  kind: 'transfer';
+  chain: ChainId;
+  token: TokenAmount;
+  to: string;
+}
+```
+
+### `SwapAction`
+
+```typescript
+interface SwapAction {
+  kind: 'swap';
+  chain: ChainId;
+  from: TokenAmount;
+  to: TokenAmount;
+  maxSlippage: number;  // basis points, e.g. 50 = 0.5%
+  via: string;          // DEX router contract address
+  calldata: `0x${string}`;
+}
+```
+
+<Callout type="warning">
+  `maxSlippage: 0` is treated as **not declared** and is always rejected. Set a non-zero value even for zero-tolerance swaps — use `1` for near-zero tolerance.
+</Callout>
+
+### `ContractCallAction`
+
+```typescript
+interface ContractCallAction {
+  kind: 'contract_call';
+  chain: ChainId;
+  contract: string;
+  calldata: `0x${string}`;
+  value?: TokenAmount;
+}
+```
+
+---
+
+## `ReceiptStore` interface
+
+```typescript
+interface ReceiptStore {
+  save(receipt: SuccessReceipt): Promise<void>;
+  get(txHash: string): Promise<SuccessReceipt | null>;
+  list(filter?: { chain?: ChainId; from?: Date; to?: Date }): Promise<SuccessReceipt[]>;
+}
+```
+
+The in-memory implementation is included in `@txfence/core`. For persistence use `@txfence/storage-sqlite` or `@txfence/storage-pg`.
+
+---
+
+## `CapLockProvider` interface
+
+```typescript
+interface CapLockProvider {
+  acquire(capId: string, amount: bigint): Promise<boolean>;
+  commit(capId: string, amount: bigint): Promise<void>;
+  release(capId: string, amount: bigint): Promise<void>;
+  getStatus(capId: string): Promise<CapStatus>;
+}
+```
+
+The two-phase protocol: `acquire` reserves the amount (returns `false` if cap exceeded), `commit` records it permanently after confirmation, `release` frees a reservation on failure.
+
+---
+
+## `ApprovalProvider` interface
+
+```typescript
+interface ApprovalProvider {
+  request(action: Action, policy: Policy): Promise<string>;  // returns approvalId
+  poll(approvalId: string, timeoutMs: number): Promise<'approved' | 'rejected' | 'timeout'>;
+}
+```
+
+---
+
+## `createWebhookApprovalProvider`
+
+```typescript
+function createWebhookApprovalProvider(options: {
+  webhookUrl: string;
+  pollUrl: string;
+  webhookSecret?: string;
+  retries?: number;
+}): ApprovalProvider
+```
+
+Dispatches an HMAC-SHA256 signed POST to `webhookUrl` with the action details and an `approvalId`. Polls `pollUrl?approvalId=...` until approval, rejection, or timeout.
+
+---
+
+## `createMemoryCapLockProvider`
+
+```typescript
+function createMemoryCapLockProvider(options: {
+  caps: CapConfig[];
+  onCapWarning?: (capId: string, used: bigint, limit: bigint) => void;
+}): CapLockProvider
+
+interface CapConfig {
+  capId: string;
+  absoluteCap?: { maxAmount: bigint; token: string; decimals: number };
+  rollingWindow?: { windowMs: number; maxAmount: bigint; token: string; decimals: number };
+}
+```
+
+Safe within a single process. For multi-process environments use `@txfence/redis`.

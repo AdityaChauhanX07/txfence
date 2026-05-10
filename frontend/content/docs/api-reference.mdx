@@ -1,0 +1,65 @@
+---
+title: API Reference
+description: Complete API documentation for all txfence packages.
+---
+
+import { Cards } from "nextra/components";
+
+# API Reference
+
+txfence is TypeScript-first. Every function, type, and interface is fully typed. No `any`. The discriminated union return types from `runPipeline` force you to handle every outcome at compile time.
+
+## Packages
+
+<Cards>
+  <Cards.Card title="@txfence/core" href="/docs/api-reference/core" arrow />
+  <Cards.Card title="@txfence/evm" href="/docs/api-reference/evm" arrow />
+  <Cards.Card title="@txfence/solana" href="/docs/api-reference/solana" arrow />
+  <Cards.Card title="@txfence/cosmos" href="/docs/api-reference/cosmos" arrow />
+  <Cards.Card title="@txfence/mcp" href="/docs/api-reference/mcp" arrow />
+  <Cards.Card title="@txfence/cli" href="/docs/api-reference/cli" arrow />
+  <Cards.Card title="@txfence/react" href="/docs/api-reference/react" arrow />
+</Cards>
+
+## Package overview
+
+| Package | Install | Purpose |
+|---|---|---|
+| `@txfence/core` | Required | Policy engine, pipeline runner, interfaces |
+| `@txfence/evm` | + 1 chain adapter | EVM adapter (Ethereum, Arbitrum, Optimism, Base) |
+| `@txfence/solana` | + 1 chain adapter | Solana adapter with SPL token support |
+| `@txfence/cosmos` | + 1 chain adapter | Cosmos SDK adapter (cosmoshub-4, osmosis-1) |
+| `@txfence/redis` | Optional | Distributed cap locking across processes |
+| `@txfence/mcp` | Optional | MCP server for AI assistant integration |
+| `@txfence/cli` | Optional | CLI for simulation, policy checking, and diffs |
+| `@txfence/react` | Optional | React hooks for frontend integration |
+| `@txfence/audit` | Optional | Append-only compliance audit log |
+| `@txfence/monitor` | Optional | On-chain reconciliation and alert monitor |
+
+## TypeScript design
+
+Every `PipelineResult` is a discriminated union on `status`. TypeScript enforces that you handle every case:
+
+```typescript
+const result = await agent.submit({ action, policy })
+
+switch (result.status) {
+  case 'success':
+    console.log(result.receipt.txHash)
+    break
+  case 'policy_rejected':
+    console.log(result.evaluation.rejectionReason)
+    break
+  case 'simulation_failed':
+    console.log(result.simulation.revertReason)
+    break
+  case 'approval_timeout':
+    console.log('Human approval timed out — transaction cancelled')
+    break
+  case 'execution_failed':
+    console.log(result.reason)
+    break
+}
+```
+
+No implicit `any`. No silent failures at runtime.

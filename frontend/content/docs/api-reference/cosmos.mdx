@@ -1,0 +1,105 @@
+---
+title: "@txfence/cosmos"
+description: Cosmos SDK / IBC chain adapter for Cosmos Hub and Osmosis.
+---
+
+import { Callout } from "nextra/components";
+
+# @txfence/cosmos
+
+Cosmos SDK / IBC chain adapter. Supports Cosmos Hub (`cosmoshub-4`) and Osmosis (`osmosis-1`). Works with any Cosmos SDK chain via standard gRPC/REST endpoints.
+
+## `simulateCosmosAction`
+
+Simulates a Cosmos SDK message via the transaction simulation endpoint.
+
+```typescript
+async function simulateCosmosAction(
+  action: Action,
+  chainId: 'cosmoshub' | 'osmosis',
+  rpcUrl: string
+): Promise<SimulationResult>
+```
+
+Returns gas estimate and whether the message would succeed. Cosmos simulation is generally more reliable than EVM simulation since account state is locked during simulation.
+
+---
+
+## `executeCosmosAction`
+
+Signs and broadcasts a Cosmos SDK transaction.
+
+```typescript
+async function executeCosmosAction(
+  action: Action,
+  chainId: 'cosmoshub' | 'osmosis',
+  rpcUrl: string,
+  signer: OfflineSigner,
+  evaluation: PolicyEvaluation,
+  simulation?: SimulationResult
+): Promise<SuccessReceipt>
+```
+
+---
+
+## `buildCosmosTransaction`
+
+Constructs a `TxBody` from a txfence `Action`.
+
+```typescript
+async function buildCosmosTransaction(
+  action: Action,
+  chainId: string,
+  senderAddress: string
+): Promise<TxBody>
+```
+
+Supports:
+- `MsgSend` for native token and IBC denom transfers
+- `MsgExecuteContract` for CosmWasm contract calls (Osmosis)
+- IBC `MsgTransfer` for cross-chain transfers
+
+---
+
+## `createCosmosSignerFromMnemonic`
+
+Creates an `OfflineSigner` from a BIP39 mnemonic. **Not for production** — use a Ledger or KMS in production.
+
+```typescript
+function createCosmosSignerFromMnemonic(
+  mnemonic: string,
+  prefix?: string   // bech32 prefix, default 'cosmos'
+): Promise<OfflineSigner>
+```
+
+---
+
+## Chain IDs
+
+| Chain | `ChainId` value | Typical RPC |
+|---|---|---|
+| Cosmos Hub | `'cosmoshub'` | `https://cosmos-rpc.publicnode.com` |
+| Osmosis | `'osmosis'` | `https://osmosis-rpc.publicnode.com` |
+
+<Callout type="info">
+  IBC transfers are constructed as `MsgTransfer` messages. The receiving chain's policy is not evaluated by txfence — only the source chain action is evaluated. Separate agent instances per chain with independent policies is the recommended pattern for cross-chain flows.
+</Callout>
+
+---
+
+## Native token amounts
+
+Cosmos uses `uatom` (micro ATOM) and `uosmo` (micro OSMO). The adapter normalizes amounts using the `decimals` field:
+
+```typescript
+const action: TransferAction = {
+  kind: 'transfer',
+  chain: 'cosmoshub',
+  token: {
+    token: 'ATOM',
+    amount: 1_000_000n,   // 1 ATOM = 1,000,000 uatom (6 decimals)
+    decimals: 6,
+  },
+  to: 'cosmos1...',
+}
+```

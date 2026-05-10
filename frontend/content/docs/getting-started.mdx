@@ -1,0 +1,141 @@
+---
+title: Getting Started
+description: Install txfence and enforce your first policy in under five minutes.
+---
+
+import { Steps, Callout, Tabs } from "nextra/components";
+
+# Getting Started
+
+<Callout type="info">
+  txfence requires Node.js 18+ and a package manager (npm, pnpm, or yarn).
+</Callout>
+
+## Installation
+
+<Tabs items={["pnpm", "npm", "yarn"]}>
+  <Tabs.Tab>
+    ```bash
+    pnpm add @txfence/core @txfence/evm
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    npm install @txfence/core @txfence/evm
+    ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+    ```bash
+    yarn add @txfence/core @txfence/evm
+    ```
+  </Tabs.Tab>
+</Tabs>
+
+## Your First Policy
+
+<Steps>
+
+### Define a policy
+
+Create a policy file that describes what your agent is allowed to do:
+
+```typescript filename="policy.ts"
+import { definePolicy } from "@txfence/core";
+
+export const policy = definePolicy({
+  id: "treasury-agent-v1",
+  version: "1.0.0",
+  rules: [
+    {
+      id: "max-transfer",
+      description: "No single transfer may exceed 1 ETH",
+      match: { action: "transfer" },
+      condition: { value: { lte: "1000000000000000000" } }, // 1e18 wei
+    },
+    {
+      id: "allowlist-only",
+      description: "Only transfer to pre-approved addresses",
+      match: { action: "transfer" },
+      condition: {
+        to: { in: "$allowlist" },
+      },
+    },
+    {
+      id: "no-contract-deploy",
+      description: "Agent may not deploy contracts",
+      match: { action: "deploy" },
+      effect: "deny",
+    },
+  ],
+  defaults: { effect: "deny" },
+});
+```
+
+### Create the fence
+
+Wrap your chain adapter with `createFence`:
+
+```typescript filename="fence.ts"
+import { createFence } from "@txfence/core";
+import { evmAdapter } from "@txfence/evm";
+import { policy } from "./policy";
+
+export const fence = createFence({
+  adapter: evmAdapter({
+    rpcUrl: process.env.RPC_URL!,
+  }),
+  policy,
+  context: {
+    allowlist: [
+      "0xRecipient1...",
+      "0xRecipient2...",
+    ],
+  },
+});
+```
+
+### Wrap your agent
+
+Pass every proposed action through the fence before execution:
+
+```typescript filename="agent.ts"
+import { fence } from "./fence";
+
+async function agentLoop() {
+  const proposedAction = await agent.think();
+
+  const result = await fence.evaluate(proposedAction);
+
+  if (result.allowed) {
+    await fence.execute(proposedAction); // executes on-chain
+  } else {
+    console.log("Blocked:", result.violations);
+  }
+}
+```
+
+### Run it
+
+```bash
+npx ts-node agent.ts
+```
+
+</Steps>
+
+## What Just Happened?
+
+When `fence.evaluate()` is called, txfence runs the proposed action through a **five-stage pipeline**:
+
+1. **Parse** — decode the raw action into a normalized `ActionIntent`
+2. **Simulate** — dry-run against a forked chain state (no gas spent)
+3. **Evaluate** — test every policy rule in order; first match wins
+4. **Audit** — write a tamper-evident log entry regardless of outcome
+5. **Execute** — submit to the chain only if all rules pass
+
+If any rule returns `deny`, execution is halted and `result.allowed` is `false`.
+
+## Next Steps
+
+- [Core Concepts](/docs/core-concepts) — understand the policy object, action types, and pipeline stages
+- [API Reference](/docs/api-reference) — full type signatures for every package
+- [Architecture](/docs/architecture) — how the pipeline works under the hood

@@ -1,0 +1,116 @@
+---
+title: "@txfence/mcp"
+description: MCP server exposing txfence capabilities to AI assistants.
+---
+
+import { Callout } from "nextra/components";
+
+# @txfence/mcp
+
+MCP (Model Context Protocol) server that exposes txfence capabilities to AI assistants. Integrates with Claude, Cursor, and any MCP-compatible tool.
+
+## MCP server configuration
+
+Add to your MCP server config (e.g., `.cursor/mcp.json` or `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "txfence": {
+      "command": "npx",
+      "args": ["txfence", "mcp"],
+      "env": {
+        "TXFENCE_CONFIG": "./txfence.config.ts"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Tools
+
+### `txfence_simulate`
+
+Runs the full txfence simulation pipeline without executing on-chain.
+
+**Input:**
+```json
+{
+  "action": {
+    "kind": "transfer",
+    "chain": "ethereum",
+    "token": { "token": "ETH", "amount": "100000000000000000", "decimals": 18 },
+    "to": "0xRecipient"
+  }
+}
+```
+
+**Output:** `SimulationResult` with `coverageLevel`, `gasEstimate`, `wouldRevert`, `caveats`.
+
+---
+
+### `txfence_check_policy`
+
+Evaluates an action against the current policy without simulation or execution. Fast — no RPC calls.
+
+**Input:** Same as `txfence_simulate`.
+
+**Output:** `PolicyEvaluation` with `passed`, `checksRun`, `rejectionReason` if failed.
+
+---
+
+### `txfence_submit`
+
+Submits an action through the full txfence pipeline.
+
+<Callout type="warning">
+  `dryRun: true` by default. Set `dryRun: false` to actually execute on-chain. The two-step pattern — dry run first, then confirm — is strongly recommended.
+</Callout>
+
+**Input:**
+```json
+{
+  "action": { ... },
+  "dryRun": true
+}
+```
+
+**Output:** `PipelineResult` with full status, evaluation, simulation, and receipt (if executed).
+
+---
+
+### `txfence_get_receipt`
+
+Retrieves a stored execution receipt by transaction hash.
+
+**Input:** `{ "txHash": "0x..." }`
+
+**Output:** `SuccessReceipt` with action details, evaluation result, and on-chain confirmation.
+
+---
+
+### `txfence_explain_rejection`
+
+Returns a human-readable explanation of a policy rejection reason.
+
+**Input:** `{ "rejectionReason": "spend_exceeds_cap" }`
+
+**Output:** Plain-text explanation with the specific check that failed and how to fix it.
+
+---
+
+### `txfence_diff_policies`
+
+Computes the diff between two policy objects and returns the blast radius of the change.
+
+**Input:**
+```json
+{
+  "before": { "maxSpendPerTx": { "token": "USDC", "amount": "10000000000", "decimals": 6 } },
+  "after": { "maxSpendPerTx": { "token": "USDC", "amount": "5000000000", "decimals": 6 } }
+}
+```
+
+**Output:** A list of changed fields with the effect of each change (more restrictive / less restrictive) and any actions that would be affected.

@@ -1,0 +1,55 @@
+/* Nextra dark theme overrides — match txfence palette */
+:root {
+  --nextra-primary-hue: 0;
+  --nextra-primary-saturation: 0%;
+}
+
+.dark {
+  --nextra-bg: #080808;
+  --nextra-sidebar-bg: #0a0a0a;
+  --nextra-navbar-bg: rgba(8, 8, 8, 0.85);
+  --nextra-border-color: #1f1f1f;
+}
+
+/* Sidebar */
+.dark .nextra-sidebar-container {
+  background: #0a0a0a;
+  border-right-color: #1f1f1f;
+}
+
+/* Navbar */
+.dark header {
+  background: rgba(8, 8, 8, 0.85);
+  border-bottom-color: #1f1f1f;
+  backdrop-filter: blur(12px);
+}
+
+/* Primary color — links, active states — use near-white instead of blue */
+.dark .nextra-sidebar a[aria-current="page"] {
+  color: #e8e8e8;
+  background: #141414;
+}
+
+/* Code blocks */
+.dark pre {
+  background: #0f0f0f !important;
+  border: 1px solid #1f1f1f;
+}
+
+/* Prose */
+.dark .nextra-content {
+  color: #888888;
+}
+
+.dark .nextra-content h1,
+.dark .nextra-content h2,
+.dark .nextra-content h3,
+.dark .nextra-content h4 {
+  color: #e8e8e8;
+}
+
+/* Footer */
+.dark footer {
+  border-top-color: #1f1f1f;
+  background: #080808;
+}
