@@ -232,7 +232,7 @@ export default function PlaygroundPage() {
   return (
     <>
       <Nav />
-      <main style={{ minHeight: "100vh", padding: "7rem 1.5rem 4rem", background: "var(--color-bg-primary)" }}>
+      <main data-animate style={{ minHeight: "100vh", padding: "7rem 1.5rem 4rem", background: "var(--color-bg-primary)", "--stagger": 1 } as React.CSSProperties}>
         <style>{`
           .pg-label { display: block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-tertiary); margin-bottom: 0.375rem; }
           .pg-input { width: 100%; background: var(--color-bg-primary); border: 1px solid var(--color-border-primary); border-radius: 5px; padding: 0.4rem 0.625rem; font-family: var(--font-mono); font-size: 12px; color: var(--color-text-primary); outline: none; box-sizing: border-box; }

@@ -3,6 +3,7 @@ title: Security Model
 description: Trust boundaries, threat model, and security guarantees of the txfence SDK.
 ---
 
+import Image from 'next/image'
 import { Callout } from "nextra/components";
 
 # Security Model
@@ -11,23 +12,13 @@ import { Callout } from "nextra/components";
 
 txfence operates within a specific trust model. Understanding what it does and does not protect against is essential for production deployments.
 
-```
-┌─────────────────────────────────────────────────────┐
-│  TRUSTED                                            │
-│  • Policy definitions (written by you)              │
-│  • txfence SDK code                                 │
-│  • Your chain adapter configuration                 │
-└─────────────────────────────────────────────────────┘
-         │ evaluated against
-         ▼
-┌─────────────────────────────────────────────────────┐
-│  UNTRUSTED                                          │
-│  • Agent outputs (LLM completions, tool calls)      │
-│  • External data (oracles, API responses)           │
-│  • User inputs fed to the agent                     │
-│  • On-chain state (contract return values)          │
-└─────────────────────────────────────────────────────┘
-```
+<Image
+  src="/images/trust-boundaries.svg"
+  alt="Trust boundaries — trusted zone contains policy definitions, SDK code, and chain adapter config. Untrusted zone contains agent outputs, external data, user inputs, and on-chain state."
+  width={680}
+  height={280}
+  style={{ width: '100%', height: 'auto' }}
+/>
 
 ## What txfence Guarantees
 

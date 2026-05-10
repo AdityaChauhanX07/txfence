@@ -1,0 +1,60 @@
+<svg width="100%" viewBox="0 0 680 280" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>txfence pipeline architecture</title>
+<desc>Agent action flows through parse, simulate, evaluate, audit, and execute stages inside the txfence policy layer before reaching the chain.</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#555" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<!-- Agent -->
+<rect x="270" y="16" width="140" height="36" rx="6" fill="#111" stroke="#2a2a2a" stroke-width="1"/>
+<text x="340" y="39" text-anchor="middle" font-family="ui-monospace,monospace" font-size="12" font-weight="500" fill="#888">agent</text>
+
+<!-- Arrow agent → fence -->
+<line x1="340" y1="52" x2="340" y2="76" stroke="#333" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Fence dashed container -->
+<rect x="48" y="80" width="584" height="112" rx="8" fill="none" stroke="#2a2a2a" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="68" y="96" font-family="ui-monospace,monospace" font-size="9" letter-spacing="0.1em" fill="#3a3a3a">FENCE</text>
+
+<!-- Parse -->
+<rect x="60" y="100" width="96" height="76" rx="6" fill="#111" stroke="#2a2a2a" stroke-width="1"/>
+<text x="108" y="132" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" font-weight="500" fill="#aaa">parse</text>
+<text x="108" y="150" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#444">decode action</text>
+<line x1="156" y1="138" x2="176" y2="138" stroke="#333" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Simulate -->
+<rect x="176" y="100" width="96" height="76" rx="6" fill="#111" stroke="#2a2a2a" stroke-width="1"/>
+<text x="224" y="132" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" font-weight="500" fill="#aaa">simulate</text>
+<text x="224" y="150" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#444">eth_call</text>
+<line x1="272" y1="138" x2="292" y2="138" stroke="#333" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Evaluate -->
+<rect x="292" y="100" width="96" height="76" rx="6" fill="#111" stroke="#2a2a2a" stroke-width="1"/>
+<text x="340" y="132" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" font-weight="500" fill="#aaa">evaluate</text>
+<text x="340" y="150" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#444">policy checks</text>
+<line x1="388" y1="138" x2="408" y2="138" stroke="#333" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Audit -->
+<rect x="408" y="100" width="96" height="76" rx="6" fill="#111" stroke="#2a2a2a" stroke-width="1"/>
+<text x="456" y="132" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" font-weight="500" fill="#aaa">audit</text>
+<text x="456" y="150" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#444">record outcome</text>
+<line x1="504" y1="138" x2="524" y2="138" stroke="#333" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Execute -->
+<rect x="524" y="100" width="96" height="76" rx="6" fill="#111" stroke="#2a2a2a" stroke-width="1"/>
+<text x="572" y="132" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" font-weight="500" fill="#aaa">execute</text>
+<text x="572" y="150" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#444">sign &amp; broadcast</text>
+
+<!-- Arrow fence → chain -->
+<line x1="340" y1="192" x2="340" y2="220" stroke="#333" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- Rejection path -->
+<path d="M 60 138 L 36 138 L 36 252 L 270 252" fill="none" stroke="#2a2a2a" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arrow)"/>
+<text x="22" y="196" text-anchor="middle" font-family="ui-monospace,monospace" font-size="9" fill="#3a3a3a">reject</text>
+
+<!-- Chain -->
+<rect x="220" y="224" width="240" height="36" rx="6" fill="#111" stroke="#2a2a2a" stroke-width="1"/>
+<text x="340" y="247" text-anchor="middle" font-family="ui-monospace,monospace" font-size="11" font-weight="500" fill="#888">chain (evm · solana · cosmos)</text>
+</svg>

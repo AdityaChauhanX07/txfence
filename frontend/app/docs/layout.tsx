@@ -51,7 +51,9 @@ export default async function DocsLayout({ children }: { children: ReactNode }) 
         </Footer>
       }
     >
-      {children}
+      <div data-animate style={{ "--start": "100ms" } as React.CSSProperties}>
+        {children}
+      </div>
     </Layout>
   );
 }

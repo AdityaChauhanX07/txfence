@@ -6,7 +6,6 @@ const FOOTER_COLS = [
     links: [
       { label: "Docs", href: "/docs" },
       { label: "Playground", href: "/playground" },
-      { label: "Blog", href: "/blog" },
       { label: "Pricing", href: "/pricing" },
     ],
   },
@@ -169,11 +168,21 @@ export function Footer() {
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: 11,
-              color: "var(--color-text-tertiary)",
+              color: "var(--color-text-secondary)",
               textDecoration: "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
             }}
           >
-            ⚡ txfence
+            <svg width="18" height="12" viewBox="0 0 28 18" fill="none" aria-hidden="true" style={{ color: "var(--color-text-secondary)" }}>
+              <rect x="5" y="1" width="2" height="16" rx="1" fill="currentColor"/>
+              <rect x="1" y="1" width="10" height="2" rx="1" fill="currentColor"/>
+              <rect x="18" y="1" width="2" height="16" rx="1" fill="currentColor"/>
+              <rect x="18" y="1" width="8" height="2" rx="1" fill="currentColor"/>
+              <rect x="14" y="9" width="12" height="2" rx="1" fill="currentColor"/>
+            </svg>
+            txfence
           </a>
         </div>
       </div>

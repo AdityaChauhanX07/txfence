@@ -9,20 +9,15 @@ description: How txfence's five-stage pipeline and plugin system are structured 
 
 txfence is structured as a **middleware pipeline** that sits between your agent and the blockchain. Every action proposal flows through a fixed sequence of stages before it is allowed to touch chain state.
 
-```
-Agent
-  │
-  ▼
-┌─────────────────────────────────────────────┐
-│                   Fence                      │
-│                                             │
-│  Parse → Simulate → Evaluate → Audit → Exec │
-│                                             │
-└─────────────────────────────────────────────┘
-  │
-  ▼
-Chain (EVM / Solana / Cosmos)
-```
+import Image from 'next/image'
+
+<Image
+  src="/images/pipeline-architecture.svg"
+  alt="txfence pipeline architecture — agent action flows through parse, simulate, evaluate, audit, and execute stages inside the fence before reaching the chain"
+  width={680}
+  height={280}
+  style={{ width: '100%', height: 'auto' }}
+/>
 
 ## Stage Details
 

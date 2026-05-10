@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -8,7 +9,7 @@ import { Menu, X } from "lucide-react";
 const navLinks = [
   { label: "Docs", href: "/docs" },
   { label: "Playground", href: "/playground" },
-  { label: "Blog", href: "/blog" },
+  { label: "Pricing", href: "/pricing" },
 ];
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -16,6 +17,18 @@ const navLinks = [
 export function Nav() {
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const pathname = usePathname();
+  const isHome = pathname === "/";
+  const [visible, setVisible] = useState(!isHome);
+
+  useEffect(() => {
+    if (!isHome) {
+      setVisible(true);
+      return;
+    }
+    const t = setTimeout(() => setVisible(true), 3800);
+    return () => clearTimeout(t);
+  }, [isHome]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -28,7 +41,6 @@ export function Nav() {
     <>
       <style>{`
         .nav-link:hover { color: var(--color-text-secondary); }
-        .nav-cta:hover { border-color: var(--color-text-tertiary); color: var(--color-text-secondary); }
       `}</style>
 
       <header
@@ -41,6 +53,9 @@ export function Nav() {
           background: "rgba(8, 8, 8, 0.85)",
           backdropFilter: "blur(12px)",
           borderBottom: "1px solid var(--color-border-primary)",
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(-8px)",
+          transition: isHome ? "opacity 0.6s ease, transform 0.6s ease" : "none",
         }}
       >
         {/* Inner container */}
@@ -124,22 +139,6 @@ export function Nav() {
               >
                 github
               </a>
-              <a
-                href="/docs"
-                className="nav-cta"
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 12,
-                  color: "var(--color-text-secondary)",
-                  textDecoration: "none",
-                  border: "1px solid var(--color-border-secondary)",
-                  borderRadius: 5,
-                  padding: "0.375rem 0.75rem",
-                  transition: "border-color 0.15s ease, color 0.15s ease",
-                }}
-              >
-                get started
-              </a>
             </div>
           )}
 
@@ -218,22 +217,6 @@ export function Nav() {
                 }}
               >
                 github
-              </a>
-              <a
-                href="/docs"
-                className="nav-cta"
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 12,
-                  color: "var(--color-text-secondary)",
-                  textDecoration: "none",
-                  border: "1px solid var(--color-border-secondary)",
-                  borderRadius: 5,
-                  padding: "0.375rem 0.75rem",
-                  transition: "border-color 0.15s ease, color 0.15s ease",
-                }}
-              >
-                get started
               </a>
             </div>
           </div>

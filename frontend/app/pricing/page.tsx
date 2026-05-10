@@ -1,3 +1,5 @@
+import { Nav } from "@/components/homepage/nav";
+import { Footer } from "@/components/homepage/footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,107 +28,148 @@ const enterpriseFeatures = [
 
 export default function PricingPage() {
   return (
-    <main className="min-h-screen pt-24 pb-16 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-16">
-          <h1 className="text-4xl font-bold text-text-primary mb-4">
-            Open source. Production ready.
-          </h1>
-          <p className="text-text-secondary text-lg max-w-xl mx-auto">
-            txfence is MIT licensed. Self-host on your own infrastructure with zero vendor lock-in.
-          </p>
-        </div>
+    <>
+      <Nav />
+      <main style={{ minHeight: "100vh", padding: "6rem 1.5rem 4rem" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Open Source */}
-          <Card className="p-8 border-accent/40 hover:-translate-y-0">
-            <div className="flex items-center gap-3 mb-6">
-              <Badge variant="success">Current</Badge>
-              <span className="text-xs text-text-tertiary">Available now</span>
-            </div>
-
-            <h2 className="text-2xl font-bold text-text-primary mb-2">Open Source</h2>
-            <p className="text-text-secondary text-sm mb-6">
-              Everything you need to build policy-gated agents.
+          {/* Header */}
+          <div data-animate style={{ marginBottom: "3rem", "--stagger": 1 } as React.CSSProperties}>
+            <p style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--color-text-tertiary)",
+              marginBottom: "0.75rem",
+              letterSpacing: "0.05em",
+            }}>
+              pricing
             </p>
-
-            <div className="mb-8">
-              <span className="text-4xl font-extrabold text-accent">Free</span>
-              <span className="text-text-tertiary text-sm ml-2">forever</span>
-            </div>
-
-            <ul className="space-y-3 mb-8">
-              {openSourceFeatures.map((feature) => (
-                <li key={feature} className="flex items-start gap-2.5 text-sm text-text-secondary">
-                  <span className="text-success flex-shrink-0 mt-0.5">✓</span>
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Button variant="primary" size="lg" href="/docs" className="w-full justify-center">
-              Get Started
-            </Button>
-
-            <p className="text-xs text-text-tertiary text-center mt-3">
-              No account required · No usage limits
+            <h1 style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: "clamp(1.5rem, 3vw, 2rem)",
+              fontWeight: 600,
+              color: "var(--color-text-primary)",
+              marginBottom: "0.75rem",
+              lineHeight: 1.3,
+            }}>
+              Open source. Production ready.
+            </h1>
+            <p style={{ fontSize: 14, color: "var(--color-text-secondary)", lineHeight: 1.6 }}>
+              txfence is MIT licensed. Self-host on your own infrastructure with zero vendor lock-in.
             </p>
-          </Card>
+          </div>
 
-          {/* Enterprise */}
-          <Card className="p-8 border-dashed opacity-80 hover:-translate-y-0">
-            <div className="flex items-center gap-3 mb-6">
-              <Badge variant="default">Coming Soon</Badge>
-              <span className="text-xs text-text-tertiary">2026</span>
-            </div>
+          {/* Plans */}
+          <div data-animate style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", "--stagger": 2 } as React.CSSProperties}>
 
-            <h2 className="text-2xl font-bold text-text-primary mb-2">Enterprise</h2>
-            <p className="text-text-secondary text-sm mb-6">
-              Managed infrastructure with SLAs for institutional teams.
+            {/* Open Source */}
+            <Card>
+              <div style={{ padding: "1.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                      open source
+                    </span>
+                    <Badge variant="success">Current</Badge>
+                  </div>
+                  <div>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 20, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                      free
+                    </span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-tertiary)", marginLeft: "0.375rem" }}>
+                      forever
+                    </span>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: "1.25rem" }}>
+                  Everything you need to build policy-gated agents.
+                </p>
+
+                <div style={{ marginBottom: "1.5rem" }}>
+                  {openSourceFeatures.map((feature) => (
+                    <div key={feature} style={{ display: "flex", alignItems: "baseline", gap: "0.625rem", marginBottom: "0.5rem" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-success)", flexShrink: 0 }}>✓</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}>{feature}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Button variant="secondary" size="md" href="/docs" className="w-full justify-center">
+                  Get Started
+                </Button>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-tertiary)", textAlign: "center", marginTop: "0.625rem" }}>
+                  No account required · No usage limits
+                </p>
+              </div>
+            </Card>
+
+            {/* Enterprise */}
+            <Card className="opacity-80">
+              <div style={{ padding: "1.5rem" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)" }}>
+                      enterprise
+                    </span>
+                    <Badge variant="default">Coming Soon</Badge>
+                  </div>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>
+                    contact us
+                  </span>
+                </div>
+
+                <p style={{ fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.5, marginBottom: "1.25rem" }}>
+                  Managed infrastructure with SLAs for institutional teams.
+                </p>
+
+                <div style={{ marginBottom: "1.5rem" }}>
+                  {enterpriseFeatures.map((feature) => (
+                    <div key={feature} style={{ display: "flex", alignItems: "baseline", gap: "0.625rem", marginBottom: "0.5rem" }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-tertiary)", flexShrink: 0 }}>○</span>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-tertiary)" }}>{feature}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="md"
+                  href="mailto:quantitativefinance6@gmail.com?subject=txfence Enterprise"
+                  className="w-full justify-center"
+                >
+                  Contact Us
+                </Button>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-tertiary)", textAlign: "center", marginTop: "0.625rem" }}>
+                  Early access available
+                </p>
+              </div>
+            </Card>
+          </div>
+
+          {/* Bottom */}
+          <div data-animate style={{
+            marginTop: "3rem",
+            paddingTop: "1.5rem",
+            borderTop: "1px solid var(--color-border-primary)",
+            "--stagger": 3,
+          } as React.CSSProperties}>
+            <p style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: "0.5rem" }}>
+              questions?
             </p>
-
-            <div className="mb-8">
-              <span className="text-2xl font-bold text-text-secondary">Contact us</span>
-            </div>
-
-            <ul className="space-y-3 mb-8">
-              {enterpriseFeatures.map((feature) => (
-                <li key={feature} className="flex items-start gap-2.5 text-sm text-text-tertiary">
-                  <span className="text-text-tertiary flex-shrink-0 mt-0.5">○</span>
-                  <span>{feature}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Button
-              variant="outline"
-              size="lg"
-              href="mailto:quantitativefinance6@gmail.com?subject=txfence Enterprise"
-              className="w-full justify-center"
+            <a
+              href="https://github.com/AdityaChauhanX07/txfence/discussions"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--color-text-secondary)" }}
             >
-              Contact Us
-            </Button>
+              open a discussion on github →
+            </a>
+          </div>
 
-            <p className="text-xs text-text-tertiary text-center mt-3">
-              Early access available
-            </p>
-          </Card>
         </div>
-
-        <div className="mt-16 text-center">
-          <p className="text-sm text-text-tertiary mb-2">
-            Questions? Open an issue or start a discussion on GitHub.
-          </p>
-          <a
-            href="https://github.com/AdityaChauhanX07/txfence/discussions"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-accent hover:underline"
-          >
-            GitHub Discussions →
-          </a>
-        </div>
-      </div>
-    </main>
+      </main>
+      <Footer />
+    </>
   );
 }
