@@ -16,6 +16,9 @@ export type {
   MemoryCapLockProviderOptions,
   RollingWindowConfig,
   AbsoluteCapConfig,
+  CapInspection,
+  AbsoluteCapInspection,
+  RollingWindowInspection,
 } from './caps/index.js'
 export type { MetadataVerifier, MetadataVerificationResult } from './verification/index.js'
 export { createMultiChainAdapter } from './adapters/index.js'

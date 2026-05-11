@@ -173,3 +173,83 @@ describe('createMemoryCapLockProvider — both caps', () => {
 })
 
 capLockProviderContract('createMemoryCapLockProvider — contract', (configs) => createMemoryCapLockProvider(configs))
+
+// ── inspect() ────────────────────────────────────────────────────────────────
+
+describe('createMemoryCapLockProvider — inspect()', () => {
+  it('returns full remaining when nothing spent', async () => {
+    const provider = createMemoryCapLockProvider([{
+      capId: 'inspect-1',
+      absoluteCap: { maxAmount: 1000n, token: 'USDC' },
+    }])
+    const inspection = await provider.inspect('inspect-1')
+    expect(inspection.capId).toBe('inspect-1')
+    expect(inspection.absoluteCap?.maxAmount).toBe(1000n)
+    expect(inspection.absoluteCap?.totalCommitted).toBe(0n)
+    expect(inspection.absoluteCap?.totalPending).toBe(0n)
+    expect(inspection.absoluteCap?.remaining).toBe(1000n)
+    expect(inspection.absoluteCap?.pctUsed).toBe(0)
+    expect(inspection.activeLocks).toBe(0)
+  })
+
+  it('reflects pending after acquire', async () => {
+    const provider = createMemoryCapLockProvider([{
+      capId: 'inspect-2',
+      absoluteCap: { maxAmount: 1000n, token: 'USDC' },
+    }])
+    const result = await provider.acquire('inspect-2', 300n, 'USDC')
+    expect(result.granted).toBe(true)
+    const inspection = await provider.inspect('inspect-2')
+    expect(inspection.absoluteCap?.totalPending).toBe(300n)
+    expect(inspection.absoluteCap?.remaining).toBe(700n)
+    expect(inspection.activeLocks).toBe(1)
+  })
+
+  it('reflects committed after commit', async () => {
+    const provider = createMemoryCapLockProvider([{
+      capId: 'inspect-3',
+      absoluteCap: { maxAmount: 1000n, token: 'USDC' },
+    }])
+    const result = await provider.acquire('inspect-3', 300n, 'USDC')
+    if (!result.granted) throw new Error('expected granted')
+    await provider.commit('inspect-3', result.lockId, 300n)
+    const inspection = await provider.inspect('inspect-3')
+    expect(inspection.absoluteCap?.totalCommitted).toBe(300n)
+    expect(inspection.absoluteCap?.totalPending).toBe(0n)
+    expect(inspection.absoluteCap?.remaining).toBe(700n)
+    expect(inspection.activeLocks).toBe(0)
+  })
+
+  it('reflects restored remaining after release', async () => {
+    const provider = createMemoryCapLockProvider([{
+      capId: 'inspect-4',
+      absoluteCap: { maxAmount: 1000n, token: 'USDC' },
+    }])
+    const result = await provider.acquire('inspect-4', 300n, 'USDC')
+    if (!result.granted) throw new Error('expected granted')
+    await provider.release('inspect-4', result.lockId, 300n)
+    const inspection = await provider.inspect('inspect-4')
+    expect(inspection.absoluteCap?.remaining).toBe(1000n)
+    expect(inspection.activeLocks).toBe(0)
+  })
+
+  it('returns rolling window inspection with resetsAt', async () => {
+    const provider = createMemoryCapLockProvider([{
+      capId: 'inspect-5',
+      rollingWindow: { windowMs: 3_600_000, maxAmount: 1000n, token: 'USDC' },
+    }])
+    const result = await provider.acquire('inspect-5', 400n, 'USDC')
+    if (!result.granted) throw new Error('expected granted')
+    await provider.commit('inspect-5', result.lockId, 400n)
+    const inspection = await provider.inspect('inspect-5')
+    expect(inspection.rollingWindow?.totalInWindow).toBe(400n)
+    expect(inspection.rollingWindow?.remaining).toBe(600n)
+    expect(inspection.rollingWindow?.resetsAt).toBeGreaterThan(Date.now())
+    expect(inspection.rollingWindow?.resetsAt).toBeLessThanOrEqual(Date.now() + 3_600_000 + 100)
+  })
+
+  it('throws for unknown capId', async () => {
+    const provider = createMemoryCapLockProvider([])
+    await expect(provider.inspect('nonexistent')).rejects.toThrow('nonexistent')
+  })
+})

@@ -1,4 +1,4 @@
-import type { CapLockProvider, CapLockResult, CapConfig, CapWarningEvent } from './provider.js'
+import type { CapLockProvider, CapLockResult, CapConfig, CapWarningEvent, CapInspection, AbsoluteCapInspection, RollingWindowInspection } from './provider.js'
 
 type WindowBucket = {
   windowStart: number
@@ -112,6 +112,71 @@ export function createMemoryCapLockProvider(
       if (capState.config.absoluteCap !== undefined) {
         checkWarning(capId, capState.config, capState.absoluteTotal, capState.config.absoluteCap.maxAmount, capState.config.absoluteCap.token, 'absolute', options?.onCapWarning)
       }
+    },
+
+    async inspect(capId: string): Promise<CapInspection> {
+      const capState = state.get(capId)
+      if (capState === undefined) throw new Error('unknown capId: ' + capId)
+
+      const now = Date.now()
+      const config = capState.config
+
+      let absoluteCapInspection: AbsoluteCapInspection | undefined = undefined
+      if (config.absoluteCap !== undefined) {
+        const totalCommitted = capState.absoluteTotal
+        const totalPending = capState.pendingTotal
+        const maxAmount = config.absoluteCap.maxAmount
+        const used = totalCommitted + totalPending
+        absoluteCapInspection = {
+          maxAmount,
+          token: config.absoluteCap.token,
+          totalCommitted,
+          totalPending,
+          remaining: used >= maxAmount ? 0n : maxAmount - used,
+          pctUsed: Math.round(Number(used * 1000n / maxAmount)) / 10,
+        }
+      }
+
+      let rollingWindowInspection: RollingWindowInspection | undefined = undefined
+      if (config.rollingWindow !== undefined) {
+        const windowMs = config.rollingWindow.windowMs
+        const maxAmount = config.rollingWindow.maxAmount
+
+        const activeBuckets = capState.windowBuckets.filter(
+          b => b.windowStart >= now - windowMs
+        )
+
+        const totalInWindow = activeBuckets.reduce((sum, b) => sum + b.amount, 0n)
+        const totalPending = capState.pendingTotal
+        const used = totalInWindow + totalPending
+
+        const windowStart = activeBuckets.length > 0
+          ? Math.min(...activeBuckets.map(b => b.windowStart))
+          : now
+
+        const resetsAt = activeBuckets.length > 0
+          ? Math.min(...activeBuckets.map(b => b.windowStart)) + windowMs
+          : now
+
+        rollingWindowInspection = {
+          maxAmount,
+          token: config.rollingWindow.token,
+          windowMs,
+          windowStart,
+          totalInWindow,
+          totalPending,
+          remaining: used >= maxAmount ? 0n : maxAmount - used,
+          pctUsed: Math.round(Number(used * 1000n / maxAmount)) / 10,
+          resetsAt,
+        }
+      }
+
+      return Promise.resolve({
+        capId,
+        ...(absoluteCapInspection !== undefined ? { absoluteCap: absoluteCapInspection } : {}),
+        ...(rollingWindowInspection !== undefined ? { rollingWindow: rollingWindowInspection } : {}),
+        activeLocks: capState.pendingLocks.size,
+      })
     },
 
     ...(options?.onCapWarning !== undefined ? { onCapWarning: options.onCapWarning } : {}),

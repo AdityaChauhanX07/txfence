@@ -7,4 +7,7 @@ export type {
   CapWarningEvent,
   RollingWindowConfig,
   AbsoluteCapConfig,
+  CapInspection,
+  AbsoluteCapInspection,
+  RollingWindowInspection,
 } from './provider.js'
