@@ -24,6 +24,7 @@ type PipelineAuditOutcome =
   | { status: 'success'; txHash: string; confirmedAtBlock: number; gasUsed: string }
   | { status: 'policy_rejected'; reason: PolicyRejectionReason | undefined }
   | { status: 'simulation_failed' }
+  | { status: 'simulation_stale'; stalenessMs: number }
   | { status: 'approval_timeout' }
   | { status: 'execution_failed'; reason: string }
   | { status: 'dry_run'; stoppedAt: 'policy' | 'simulation' | 'approval' | 'execution' }
@@ -53,6 +54,8 @@ function buildAuditOutcome(result: ExecutionResult): PipelineAuditOutcome {
       return { status: 'policy_rejected', reason: result.evaluation.rejectionReason }
     case 'simulation_failed':
       return { status: 'simulation_failed' }
+    case 'simulation_stale':
+      return { status: 'simulation_stale', stalenessMs: result.stalenessMs }
     case 'approval_timeout':
       return { status: 'approval_timeout' }
     case 'execution_failed':
@@ -80,6 +83,7 @@ export async function runPipeline(
 ): Promise<ExecutionResult> {
   let auditEvaluation: PolicyEvaluation = { passed: false, checksRun: [] }
   let auditSimulation: SimulationResult | undefined
+  let simulatedAt = 0
 
   const result = await (async (): Promise<ExecutionResult> => {
     // Step 1
@@ -132,6 +136,7 @@ export async function runPipeline(
       }
 
       simulationResult = await adapter.simulate(action, action.chain, rpcUrl)
+      simulatedAt = Date.now()
       auditSimulation = simulationResult
 
       if (!simulationResult.success) {
@@ -232,6 +237,21 @@ export async function runPipeline(
     }
 
     // Step 5
+    if (
+      policy.simulationStalenessMs !== undefined &&
+      simulationResult !== undefined
+    ) {
+      const stalenessMs = Date.now() - simulatedAt
+      if (stalenessMs >= policy.simulationStalenessMs) {
+        return {
+          status: 'simulation_stale',
+          action,
+          simulation: simulationResult,
+          stalenessMs,
+        }
+      }
+    }
+
     if (executor !== undefined) {
       const rpcUrl = rpcUrls[action.chain]
       if (rpcUrl === undefined) throw new Error(`no rpcUrl configured for chain: ${action.chain}`)

@@ -46,6 +46,13 @@ export function formatExecutionResult(result: ExecutionResult): string {
         'Simulation: FAILED',
         formatSimulationResult(result.simulation),
       ].join('\n')
+    case 'simulation_stale':
+      return [
+        'Status:     STALE SIMULATION',
+        `Stale by:   ${result.stalenessMs}ms`,
+        `Threshold:  ${result.simulation.simulatedAtBlock} (simulated at block)`,
+        'Action:     Re-simulate before retrying.',
+      ].join('\n')
     case 'approval_timeout':
       return [
         'Status: APPROVAL REQUIRED',

@@ -117,4 +117,16 @@ describe('formatExecutionResult', () => {
     expect(output).toContain('FAILED')
     expect(output).toContain('signing not yet implemented')
   })
+
+  it('formats a simulation_stale result correctly', () => {
+    const result: ExecutionResult = {
+      status: 'simulation_stale',
+      action: swapAction,
+      simulation: baseSimulation,
+      stalenessMs: 45000,
+    }
+    const output = formatExecutionResult(result)
+    expect(output).toContain('STALE')
+    expect(output).toContain('45000')
+  })
 })

@@ -159,6 +159,8 @@ async function runExample(): Promise<void> {
   console.log(`Status: ${result5.status}`)
   if (result5.status === 'approval_timeout') {
     console.log('Approval timed out (no approver configured in dry-run mode)')
+  } else if (result5.status === 'simulation_stale') {
+    console.log(`Simulation stale by ${result5.stalenessMs}ms — re-simulate before retrying`)
   }
 
   // Summary

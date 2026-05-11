@@ -154,3 +154,39 @@ describe('runPipeline — execution placeholder', () => {
     }
   })
 })
+
+// ── simulation staleness ──────────────────────────────────────────────────────
+
+describe('runPipeline — simulation staleness', () => {
+  it('returns simulation_stale when staleness exceeds threshold', async () => {
+    const stalePolicy: Policy = {
+      ...basePolicy,
+      requireSimulation: true,
+      simulationStalenessMs: 0,
+    }
+    const adapter = mockAdapter(passingSim)
+    const result = await runPipeline(baseSwap, stalePolicy, { ethereum: adapter }, rpcUrls)
+    expect(result.status).toBe('simulation_stale')
+    if (result.status === 'simulation_stale') {
+      expect(result.stalenessMs).toBeGreaterThanOrEqual(0)
+      expect(result.simulation).toBeDefined()
+    }
+  })
+
+  it('does not return simulation_stale when within threshold', async () => {
+    const freshPolicy: Policy = {
+      ...basePolicy,
+      requireSimulation: true,
+      simulationStalenessMs: 60000,
+    }
+    const adapter = mockAdapter(passingSim)
+    const result = await runPipeline(baseSwap, freshPolicy, { ethereum: adapter }, rpcUrls)
+    expect(result.status).not.toBe('simulation_stale')
+    expect(result.status).toBe('execution_failed')
+  })
+
+  it('does not check staleness when simulationStalenessMs is not set', async () => {
+    const result = await runPipeline(baseSwap, basePolicy, {}, {})
+    expect(result.status).not.toBe('simulation_stale')
+  })
+})

@@ -35,4 +35,5 @@ export type Policy = {
   humanApprovalTimeoutMs: number
   capLockMode: CapLockMode
   capLocks?: CapConfig[]
+  simulationStalenessMs?: number
 }

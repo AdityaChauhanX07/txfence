@@ -35,5 +35,6 @@ export type ExecutionResult =
   | { status: 'success'; receipt: SuccessReceipt }
   | { status: 'policy_rejected'; action: Action; evaluation: PolicyEvaluation }
   | { status: 'simulation_failed'; action: Action; simulation: SimulationResult }
+  | { status: 'simulation_stale'; action: Action; simulation: SimulationResult; stalenessMs: number }
   | { status: 'approval_timeout'; action: BoundAction }
   | { status: 'execution_failed'; action: Action; txHash: string; reason: string }
