@@ -44,7 +44,7 @@ function checkWarning(
 export function createMemoryCapLockProvider(
   configs: CapConfig[],
   options?: MemoryCapLockProviderOptions,
-): CapLockProvider {
+): CapLockProvider & { inspect: (capId: string) => Promise<CapInspection> } {
   const state = new Map<string, CapState>()
 
   for (const config of configs) {

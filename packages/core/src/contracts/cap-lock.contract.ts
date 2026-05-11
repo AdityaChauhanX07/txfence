@@ -65,7 +65,7 @@ export function capLockProviderContract(
         capId: 'contract-cap-inspect',
         absoluteCap: { maxAmount: 1000n, token: 'USDC' },
       }]))
-      const before = await provider.inspect('contract-cap-inspect')
+      const before = await provider.inspect!('contract-cap-inspect')
       expect(before.absoluteCap?.remaining).toBe(1000n)
       expect(before.absoluteCap?.totalCommitted).toBe(0n)
       expect(before.activeLocks).toBe(0)
@@ -73,7 +73,7 @@ export function capLockProviderContract(
       const result = await provider.acquire('contract-cap-inspect', 400n, 'USDC')
       expect(result.granted).toBe(true)
 
-      const after = await provider.inspect('contract-cap-inspect')
+      const after = await provider.inspect!('contract-cap-inspect')
       expect(after.absoluteCap?.totalPending).toBe(400n)
       expect(after.absoluteCap?.remaining).toBe(600n)
       expect(after.activeLocks).toBe(1)
@@ -81,7 +81,7 @@ export function capLockProviderContract(
 
     it('inspect() throws for unknown capId', async () => {
       const provider = await Promise.resolve(createProvider([]))
-      await expect(provider.inspect('nonexistent')).rejects.toThrow()
+      await expect(provider.inspect!('nonexistent')).rejects.toThrow()
     })
   })
 }

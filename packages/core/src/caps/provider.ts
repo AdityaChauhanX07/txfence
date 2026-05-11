@@ -62,5 +62,5 @@ export type CapLockProvider = {
   release: (capId: string, lockId: string, amount: bigint) => Promise<void>
   commit: (capId: string, lockId: string, amount: bigint) => Promise<void>
   onCapWarning?: (event: CapWarningEvent) => void
-  inspect: (capId: string) => Promise<CapInspection>
+  inspect?: (capId: string) => Promise<CapInspection>
 }
