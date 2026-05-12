@@ -4,6 +4,34 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.22.0
+
+Cap lock observability, simulation staleness protection, and infrastructure failure taxonomy.
+
+**CapLockProvider.inspect()**
+- Added `inspect?: (capId: string) => Promise<CapInspection>` to `CapLockProvider` interface — optional observability method
+- Added `CapInspection`, `AbsoluteCapInspection`, `RollingWindowInspection` types
+- `createMemoryCapLockProvider` return type narrowed to include `inspect` as required — no non-null assertions needed on the concrete type
+- `inspect()` returns remaining budget, total committed, total pending, pctUsed, activeLocks, and rolling window resetsAt timestamp
+- 6 new unit tests, 2 new contract tests
+- `inspect` is optional on the interface — Redis and other implementations are not required to implement it
+
+**simulationStalenessMs**
+- Added `simulationStalenessMs?: number` to `Policy` — maximum milliseconds between simulation and execution
+- Added `simulation_stale` to `ExecutionResult` union with `stalenessMs` field
+- Pipeline records `simulatedAt` timestamp after simulation completes; checks staleness before handing off to executor
+- Returns `{ status: 'simulation_stale', stalenessMs }` when threshold exceeded — agent must re-simulate before retrying
+- CLI `txfence submit` formats `simulation_stale` with stale duration and simulated block
+- Audit log records `simulation_stale` outcomes
+- 3 new pipeline tests, 1 new CLI format test
+
+**Infrastructure failure taxonomy**
+- Added `docs/txfence-failure-taxonomy.md` — 8 txfence infrastructure failure modes with detection and mitigation guidance
+- Covers: receipt write post-confirmation, Redis cap lock crash, unreachable webhook, audit log disk full, corrupted checkpoint, concurrent file writers, RPC errors (handled), simulation staleness (handled)
+- Summary table showing which failures txfence handles vs requires external mitigation
+
+---
+
 ## v0.19.0
 
 Developer experience improvements.
