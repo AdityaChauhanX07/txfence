@@ -75,3 +75,30 @@ export type {
   AgentCoordinatorConfig,
   IntentClaimResult,
 } from './coordination/index.js'
+export {
+  evaluateIntent,
+  validateIntentGraph,
+  getExecutionPlan,
+  getPoisonedSteps,
+  checkMaxSteps,
+  analyzeIntentPosition,
+  getActionPositionChanges,
+  mergePositionChanges,
+  isSingleTokenIntent,
+  getDominantToken,
+} from './intent/index.js'
+export type {
+  Intent,
+  IntentStep,
+  IntentPolicy,
+  IntentEvaluationResult,
+  IntentPolicyEvaluationResult,
+  StepEvaluationResult,
+  IntentRejectionReason,
+  IntentExecutionResult,
+  IntentExecutionStatus,
+  StepExecutionResult,
+  PositionChange,
+  StepPositionSnapshot,
+  IntentPositionAnalysis,
+} from './intent/index.js'
