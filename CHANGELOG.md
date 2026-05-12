@@ -4,6 +4,25 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.25.0
+
+Agent graceful shutdown and health check.
+
+- Added `shutdown(timeoutMs?: number): Promise<AgentShutdownResult>` to the Agent type
+- Added `health(): AgentHealth` to the Agent type
+- Added `isShuttingDown(): boolean` to the Agent type
+- Added `AgentShutdownResult` type with `completed`, `abandoned`, and `capLocksReleased` fields
+- Added `AgentHealth` type with `status` ('healthy' | 'shutting_down'), `inFlight`, and `uptime` fields
+- `shutdown()` sets the shutting-down flag immediately, then polls every 50ms until in-flight submissions complete or the timeout expires (default 30 seconds)
+- `submit()` throws when called after `shutdown()` — no new submissions accepted during drain
+- In-flight submissions that exceed the timeout are counted as `abandoned` in the shutdown result
+- `shutdown()` inspects cap locks via `capLockProvider.inspect()` and logs a warning if active locks remain — individual lock release requires lock IDs held inside the pipeline, documented as a known limitation
+- `health()` returns a snapshot: current status, in-flight count, and uptime since agent creation — suitable for Kubernetes liveness probes and load balancer health checks
+- Added optional `capLockConfigs?: CapConfig[]` parameter to `createAgent` for cap inspection on shutdown
+- 10 new tests covering health status, uptime tracking, completed count, shutdown rejection, and multi-submission tracking
+
+---
+
 ## v0.24.0
 
 TelemetryProvider interface and pipeline instrumentation.
