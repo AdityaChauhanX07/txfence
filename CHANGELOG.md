@@ -4,6 +4,38 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.29.0
+
+Composite policy support with AND/OR trees.
+
+- Added `PolicyNode` type — a discriminated union of `PolicyLeaf`, `PolicyAnd`, and `PolicyOr`
+- Added `PolicyLeaf` — wraps a flat `Policy` with an optional label
+- Added `PolicyAnd` — all children must pass (vacuous truth for empty children)
+- Added `PolicyOr` — at least one child must pass (vacuous false for empty children)
+- Added `PolicyNodeEvaluation` — tree-structured evaluation result preserving which nodes passed and why
+- Added `evaluateNode(node, action, simulationResult?)` — walks the tree, evaluates each leaf using the existing `evaluate()` function
+- Added constructor helpers: `policyLeaf(policy, label?)`, `policyAnd(children, label?)`, `policyOr(children, label?)`
+- `firstRejectionReason` propagates from the deepest failing leaf to the root for backward-compatible error reporting
+- `runPipeline` accepts optional `policyNode` as the 12th parameter — when provided, uses `evaluateNode()` instead of `evaluate()`
+- `createAgent` accepts optional `policyNode` parameter — forwarded to every pipeline call
+- Zero breaking changes — flat `Policy` callers are completely unaffected
+- 13 new tests covering leaf evaluation, AND semantics, OR semantics, nested composites, and rejection reason propagation
+
+**Example — tiered treasury policy:**
+```typescript
+import { policyAnd, policyOr, policyLeaf } from '@txfence/core'
+
+const treasuryPolicy = policyAnd([
+  policyOr([
+    policyLeaf(smallSpendPolicy, 'small-spend'),   // up to 1000 USDC, no approval
+    policyLeaf(largeSpendPolicy, 'large-spend'),   // up to 50000 USDC, needs approval
+  ], 'spend-tier'),
+  policyLeaf(contractAllowlistPolicy, 'allowlist'), // always required
+], 'treasury')
+```
+
+---
+
 ## v0.28.0
 
 Cosmos package test coverage.
