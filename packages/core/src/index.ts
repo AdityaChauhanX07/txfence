@@ -65,3 +65,13 @@ export {
   createPolicyVersionStore,
 } from './versioning/index.js'
 export type { PolicyVersion, PolicyVersionStore } from './versioning/index.js'
+export {
+  createMemoryAgentCoordinator,
+  getIntentId,
+  getIntentIdWithNonce,
+} from './coordination/index.js'
+export type {
+  AgentCoordinator,
+  AgentCoordinatorConfig,
+  IntentClaimResult,
+} from './coordination/index.js'
