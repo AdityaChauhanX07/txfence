@@ -10,6 +10,14 @@ export {
   getDominantToken,
 } from './position.js'
 export type {
+  ForkSimulationProvider,
+  TenderlyForkConfig,
+  ForkSimulationConfig,
+  StateChange,
+  StepForkSimulationResult,
+  ForkSimulationResult,
+} from './fork-types.js'
+export type {
   Intent,
   IntentStep,
   IntentPolicy,

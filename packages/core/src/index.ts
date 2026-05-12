@@ -90,6 +90,14 @@ export {
 } from './intent/index.js'
 export type { IntentExecutionOptions } from './intent/index.js'
 export type {
+  ForkSimulationProvider,
+  TenderlyForkConfig,
+  ForkSimulationConfig,
+  StateChange,
+  StepForkSimulationResult,
+  ForkSimulationResult,
+} from './intent/index.js'
+export type {
   Intent,
   IntentStep,
   IntentPolicy,
