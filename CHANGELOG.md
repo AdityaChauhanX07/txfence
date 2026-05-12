@@ -4,6 +4,22 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.28.0
+
+Cosmos package test coverage.
+
+- Added `packages/cosmos/src/simulate.test.ts` — 8 unit tests with mocked StargateClient
+- Added `packages/cosmos/src/integration.test.ts` — 3 integration tests that skip without `COSMOS_RPC_URL`
+- Added `packages/cosmos/src/constants.test.ts` — 8 tests for `isCosmosChain` and `COSMOS_CHAIN_CONFIGS`
+- Added `packages/cosmos/vitest.config.ts` — 20 second test timeout for network tests
+- Unit tests cover: both chains for TransferAction, SwapAction/ContractCallAction with pre-built bytes, RPC failure path, non-Cosmos chain rejection, rpcUrl forwarding, SwapAction without bytes
+- Integration tests cover: real node connectivity, real block height via simulateCosmosAction, graceful failure on unreachable RPC
+- Constants tests cover: isCosmosChain true/false cases, chain config field values, all COSMOS_CHAIN_IDS have entries
+- Run integration tests: `COSMOS_RPC_URL=https://rpc.cosmos.network pnpm --filter @txfence/cosmos test`
+- 26 tests passing, 3 skipped in CI (no COSMOS_RPC_URL set)
+
+---
+
 ## v0.27.0
 
 ExecutionFailureReason discriminated union.
