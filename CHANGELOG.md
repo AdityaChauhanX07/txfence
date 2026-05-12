@@ -4,6 +4,28 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.27.0
+
+ExecutionFailureReason discriminated union.
+
+**Breaking change:** `execution_failed.reason` is no longer a string. It is now an `ExecutionFailureReason` discriminated union.
+
+- Added `ExecutionFailureReason` type with four variants:
+  - `{ code: 'no_executor' }` — no executor configured on the agent
+  - `{ code: 'executor_threw'; message: string; cause?: unknown }` — executor threw an error
+  - `{ code: 'signing_failed'; message: string }` — signing step failed
+  - `{ code: 'broadcast_failed'; message: string; txHash?: string }` — broadcast failed, optionally with a partial txHash
+- Added `formatExecutionFailureReason(reason: ExecutionFailureReason): string` helper for human-readable output
+- Pipeline updated: no-executor path returns `{ code: 'no_executor' }`, executor-throw path returns `{ code: 'executor_threw', message, cause }`
+- Audit log converts to string via `formatExecutionFailureReason` — audit entries remain human-readable
+- CLI, MCP, and integration tests updated to use structured type checks
+- TypeScript exhaustive switches will warn at compile time when new variants are added
+- 5 new tests for `formatExecutionFailureReason`, 2 new pipeline tests for `no_executor` and `executor_threw`
+
+**Migration:** If you switch on `result.status === 'execution_failed'` and read `result.reason`, update to `result.reason.code`. Use `formatExecutionFailureReason(result.reason)` for display.
+
+---
+
 ## v0.26.0
 
 Circuit breaker for RPC fault tolerance and migration guide.
