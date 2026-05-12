@@ -4,6 +4,36 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.23.0
+
+Domain-aware policy configuration validation.
+
+- Added `validateConfig(policy: Policy): ConfigValidationResult` to `@txfence/core`
+- `ConfigValidationResult` has `valid`, `errors`, and `warnings` arrays
+- `ConfigWarning` has `field`, `message`, and `severity` fields
+
+**Errors (must fix — will cause runtime failures):**
+- `chains` is empty — no actions can ever pass
+- `gasBufferMultiplier < 1.0` — every simulated transaction fails the gas buffer check
+- `humanApprovalTimeoutMs < 1000` — approval windows under 1 second are unusable
+- `maxSpendPerTx.decimals === 0` — almost certainly wrong
+- `humanApprovalThreshold.decimals !== maxSpendPerTx.decimals` for the same token — threshold comparisons will be wrong
+
+**Warnings (should fix — will cause unexpected behavior):**
+- USDC/USDT with 18 decimals — authorizes 1,000,000,000,000x the intended amount
+- ETH/WBTC with 6 decimals — decimals mismatch for known tokens
+- `humanApprovalThreshold.amount < maxSpendPerTx.amount` — every transaction triggers approval
+- `gasBufferMultiplier > 3.0` — unusually high
+- `allowedContracts` empty and `requireSimulation: false` — very permissive policy
+- Expired `allowedContracts` entries — will be rejected with `contract_entry_expired`
+
+**Integration:**
+- `txfence check-policy` CLI command now runs `validateConfig` first — exits 1 on errors, prints warnings and continues
+- Added `txfence_validate_config` MCP tool — AI assistants can validate policies before deploying
+- 14 new tests covering all 11 checks
+
+---
+
 ## v0.22.0
 
 Cap lock observability, simulation staleness protection, and infrastructure failure taxonomy.
