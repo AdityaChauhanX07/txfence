@@ -47,7 +47,7 @@ export function makeSubmitCommand(): Command {
       if (
         !dryRun &&
         result.status === 'execution_failed' &&
-        result.reason.includes('not yet implemented')
+        result.reason.code === 'no_executor'
       ) {
         console.error('signing not available for this chain')
         process.exit(1)

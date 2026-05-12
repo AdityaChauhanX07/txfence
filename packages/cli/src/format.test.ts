@@ -111,11 +111,11 @@ describe('formatExecutionResult', () => {
       status: 'execution_failed',
       action: swapAction,
       txHash: '',
-      reason: 'signing not yet implemented',
+      reason: { code: 'no_executor' },
     }
     const output = formatExecutionResult(result)
     expect(output).toContain('FAILED')
-    expect(output).toContain('signing not yet implemented')
+    expect(output).toContain('No executor')
   })
 
   it('formats a simulation_stale result correctly', () => {

@@ -310,7 +310,7 @@ describe.skipIf(!process.env['ANVIL_URL'])('EVM integration — requires Anvil',
     // Should have passed approval and reached execution_failed (no executor configured)
     expect(result.status).toBe('execution_failed')
     if (result.status === 'execution_failed') {
-      expect(result.reason).toContain('not yet implemented')
+      expect(result.reason.code).toBe('no_executor')
     }
     expect(approvalProvider.pending()).toHaveLength(1)
   }, 30000)

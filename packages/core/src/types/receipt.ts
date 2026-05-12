@@ -1,6 +1,27 @@
 import type { Action, BoundAction } from './action.js'
 import type { SimulationResult } from './simulation.js'
 
+export type ExecutionFailureReason =
+  | { code: 'no_executor' }
+  | { code: 'executor_threw'; message: string; cause?: unknown }
+  | { code: 'signing_failed'; message: string }
+  | { code: 'broadcast_failed'; message: string; txHash?: string }
+
+export function formatExecutionFailureReason(reason: ExecutionFailureReason): string {
+  switch (reason.code) {
+    case 'no_executor':
+      return 'No executor configured — set AGENT_PRIVATE_KEY to execute'
+    case 'executor_threw':
+      return `Executor error: ${reason.message}`
+    case 'signing_failed':
+      return `Signing failed: ${reason.message}`
+    case 'broadcast_failed':
+      return reason.txHash
+        ? `Broadcast failed (txHash: ${reason.txHash}): ${reason.message}`
+        : `Broadcast failed: ${reason.message}`
+  }
+}
+
 export type PolicyRejectionReason =
   | 'contract_not_allowed'
   | 'chain_not_allowed'
@@ -37,4 +58,4 @@ export type ExecutionResult =
   | { status: 'simulation_failed'; action: Action; simulation: SimulationResult }
   | { status: 'simulation_stale'; action: Action; simulation: SimulationResult; stalenessMs: number }
   | { status: 'approval_timeout'; action: BoundAction }
-  | { status: 'execution_failed'; action: Action; txHash: string; reason: string }
+  | { status: 'execution_failed'; action: Action; txHash: string; reason: ExecutionFailureReason }

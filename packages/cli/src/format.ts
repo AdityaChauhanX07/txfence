@@ -1,4 +1,5 @@
 import type { SimulationResult, ExecutionResult, PolicyEvaluation, SuccessReceipt } from '@txfence/core'
+import { formatExecutionFailureReason } from '@txfence/core'
 
 export function formatSimulationResult(result: SimulationResult): string {
   const lines = [
@@ -61,7 +62,7 @@ export function formatExecutionResult(result: ExecutionResult): string {
     case 'execution_failed':
       return [
         'Status: FAILED',
-        `Reason: ${result.reason}`,
+        `Reason: ${formatExecutionFailureReason(result.reason)}`,
       ].join('\n')
   }
 }

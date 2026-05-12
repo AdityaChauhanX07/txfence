@@ -143,14 +143,29 @@ describe('runPipeline — human approval threshold', () => {
   })
 })
 
-// ── execution placeholder ─────────────────────────────────────────────────────
+// ── ExecutionFailureReason ────────────────────────────────────────────────────
 
-describe('runPipeline — execution placeholder', () => {
-  it('returns execution_failed with the placeholder reason when all checks pass', async () => {
+describe('runPipeline — ExecutionFailureReason', () => {
+  it('returns no_executor when no executor is configured', async () => {
     const result = await runPipeline(baseSwap, basePolicy, emptyAdapters, rpcUrls)
     expect(result.status).toBe('execution_failed')
     if (result.status === 'execution_failed') {
-      expect(result.reason).toContain('not yet implemented')
+      expect(result.reason.code).toBe('no_executor')
+    }
+  })
+
+  it('returns executor_threw when executor throws', async () => {
+    const throwingExecutor = async (): Promise<never> => {
+      throw new Error('network timeout')
+    }
+    const result = await runPipeline(baseSwap, basePolicy, emptyAdapters, rpcUrls, throwingExecutor)
+    expect(result.status).toBe('execution_failed')
+    if (result.status === 'execution_failed') {
+      expect(result.reason.code).toBe('executor_threw')
+      if (result.reason.code === 'executor_threw') {
+        expect(result.reason.message).toContain('network timeout')
+        expect(result.reason.cause).toBeInstanceOf(Error)
+      }
     }
   })
 })

@@ -56,7 +56,7 @@ export function registerSubmitTool(server: McpServer, config: TxfenceConfig): vo
         const result = await runPipeline(action, mergedPolicy, config.adapters, config.rpcUrls)
         if (
           result.status === 'execution_failed' &&
-          result.reason.includes('not yet implemented')
+          result.reason.code === 'no_executor'
         ) {
           return textResult(JSON.stringify(
             { ...result, reason: 'dry run complete — set dryRun: false to execute' },

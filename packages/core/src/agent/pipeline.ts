@@ -1,6 +1,7 @@
 import type { Action, BoundAction } from '../types/action.js'
 import type { Policy, ChainId } from '../types/policy.js'
 import type { ExecutionResult, SuccessReceipt, PolicyEvaluation, PolicyRejectionReason } from '../types/receipt.js'
+import { formatExecutionFailureReason } from '../types/receipt.js'
 import type { SimulationResult } from '../types/simulation.js'
 import type { CapLockProvider } from '../caps/provider.js'
 import type { MetadataVerifier } from '../verification/provider.js'
@@ -61,7 +62,7 @@ function buildAuditOutcome(result: ExecutionResult): PipelineAuditOutcome {
     case 'approval_timeout':
       return { status: 'approval_timeout' }
     case 'execution_failed':
-      return { status: 'execution_failed', reason: result.reason }
+      return { status: 'execution_failed', reason: formatExecutionFailureReason(result.reason) }
   }
 }
 
@@ -360,10 +361,11 @@ export async function runPipeline(
               await capLockProvider.release(capLock.capId, capLockId, spendAmount)
             }
           }
-          const reason = err instanceof Error ? err.message : String(err)
-          execSpan.setStatus('error', reason)
+          const message = err instanceof Error ? err.message : String(err)
+          const reason = { code: 'executor_threw' as const, message, cause: err }
+          execSpan.setStatus('error', message)
           pipelineSpan.setAttribute('txfence.status', 'execution_failed')
-          pipelineSpan.setStatus('error', reason)
+          pipelineSpan.setStatus('error', message)
           return { status: 'execution_failed', action, txHash: '', reason }
         } finally {
           execSpan.end()
@@ -371,12 +373,12 @@ export async function runPipeline(
       }
 
       pipelineSpan.setAttribute('txfence.status', 'execution_failed')
-      pipelineSpan.setStatus('error', 'signing and broadcasting not yet implemented')
+      pipelineSpan.setStatus('error', 'no executor configured')
       return {
         status: 'execution_failed',
         action,
         txHash: '',
-        reason: 'signing and broadcasting not yet implemented',
+        reason: { code: 'no_executor' },
       }
     })()
 
