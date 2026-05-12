@@ -4,6 +4,32 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.26.0
+
+Circuit breaker for RPC fault tolerance and migration guide.
+
+**Circuit breaker**
+- Added `createCircuitBreaker(config?)` to `@txfence/core`
+- Three states: `closed` (normal), `open` (blocking), `half-open` (probing)
+- `failureThreshold` (default 5) — consecutive failures before opening
+- `successThreshold` (default 2) — consecutive successes in half-open before closing
+- `timeoutMs` (default 60000) — ms before transitioning from open to half-open
+- `onStateChange` callback — notified on every state transition
+- Added `wrapAdapterWithCircuitBreaker(adapter, breaker, chainId)` — composable wrapper for any `ChainAdapter`
+- When breaker is open: simulation returns immediately with `success: false, coverageLevel: 'none'` — no RPC call made
+- When adapter throws: failure recorded, wrapped result returned gracefully — pipeline sees `simulation_failed`, not an unhandled error
+- When simulation succeeds but `wouldRevert: true`: not recorded as a failure — the RPC worked, the transaction would revert
+- `reset()` method for manual circuit reset in operational tooling
+- 15 new tests covering all state transitions, adapter wrapping, and the wouldRevert distinction
+- Composable design: teams wrap their adapter, not buried in the pipeline
+
+**Migration guide**
+- Added `MIGRATION.md` at the repo root covering schema evolution strategy, version history, breaking changes per version, and data migration scripts
+- Covers: file store NDJSON backward compatibility, PostgreSQL ALTER TABLE strategy, checkpoint file recovery, SimulationResult field additions, ExecutionResult union additions, Agent API changes
+- Known limitations documented: no automatic schema migrations, no data versioning, file stores not suitable for high-volume production
+
+---
+
 ## v0.25.0
 
 Agent graceful shutdown and health check.
