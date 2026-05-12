@@ -4,6 +4,41 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.33.0
+
+Multi-agent coordination.
+
+- Added `AgentCoordinator` interface with intent claiming, priority comparison, and transaction rate limiting
+- Added `createMemoryAgentCoordinator()` — in-memory implementation for single-process multi-agent setups
+- Added `AgentCoordinatorConfig` type with `agentId`, `priority`, and `maxTransactionsPerWindow` fields
+
+**Intent claiming (deduplication):**
+- `claimIntent(intentId, agentId, ttlMs?)` — claims an intent ID for an agent; returns `{ claimed: true, claimId }` or `{ claimed: false, claimedBy, expiresAt }`
+- `releaseIntent(intentId, agentId)` — releases a claim; only the claiming agent can release
+- Same agent re-claiming an active intent refreshes the TTL rather than failing
+- Expired claims are automatically reclaimed by any agent
+- Wrong-agent release is a no-op — cannot steal another agent's claim
+
+**Priority:**
+- `registerAgent(config)` — registers an agent with optional priority (default 0)
+- `comparePriority(agentIdA, agentIdB)` — returns positive if A has higher priority, negative if lower, 0 if equal
+- Unregistered agents default to priority 0
+
+**Rate limiting:**
+- `recordTransaction(agentId)` — records a transaction timestamp for an agent
+- `isRateLimited(agentId)` — returns true when agent has reached `maxTransactionsPerWindow.count` in the window
+- `getTransactionCount(agentId, windowMs)` — returns count of transactions within the window; prunes expired timestamps
+- Sliding window — transactions from before the window are automatically pruned
+
+**Intent ID helpers:**
+- `getIntentId(action)` — deterministic 32-char hex ID from action parameters; same action always produces same ID
+- `getIntentIdWithNonce(action, nonce)` — unique ID for actions that should be distinct despite identical parameters
+- Both use SHA-256 of canonical JSON via existing `bigintReplacer`
+
+- 22 new tests covering all claim paths, priority ordering, rate limiting, window expiry, and intent ID stability
+
+---
+
 ## v0.32.0
 
 Policy versioning with stable hash-based identifiers.
