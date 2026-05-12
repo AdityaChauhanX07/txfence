@@ -4,6 +4,25 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.30.0
+
+Explicit dry-run mode.
+
+- Added `agent.dryRun(input)` method — runs the full pipeline without executing and returns a structured report
+- Added `DryRunResult` type with `evaluation`, `simulation`, `approvalRequired`, `approvalThreshold`, `capLockAvailable`, `wouldProceed`, `blockers`, and `dryRunAt` fields
+- Added `DryRunBlocker` discriminated union with five variants: `policy_rejected`, `simulation_failed`, `simulation_stale`, `approval_required`, `cap_lock_unavailable`
+- Added `runDryRun()` exported function for use outside `createAgent`
+- Cap locks are acquired then immediately released during dry run — tests availability without consuming budget
+- Approval threshold is checked without dispatching a webhook
+- Simulation runs when adapter is configured, returns results without gating on `requireSimulation`
+- `wouldProceed: true` only when all checks pass with zero blockers
+- Added `txfence dry-run` CLI command — prints a structured report showing what would happen, exits 1 if anything would block execution
+- CLI uses the same adapter and RPC config as other commands — simulation runs against real nodes when configured
+- `txfence dry-run` is CI-friendly: exit 0 means execution would proceed, exit 1 means something would block
+- 8 new tests covering all blocker kinds, cap budget preservation, and timestamp
+
+---
+
 ## v0.29.0
 
 Composite policy support with AND/OR trees.
