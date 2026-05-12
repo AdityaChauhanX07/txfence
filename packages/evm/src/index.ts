@@ -1,3 +1,4 @@
+export { createFork, simulateOnFork, deleteFork, buildForkTransactionParams } from './fork-client.js'
 export { simulateEvmAction } from './simulate.js'
 export type { TenderlyConfig } from './simulate.js'
 export { simulateWithTenderly } from './tenderly.js'
