@@ -9,7 +9,8 @@ import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider, ApprovalRequest, ApprovalDecision } from '../approval/types.js'
 import type { TelemetryProvider } from '../telemetry/types.js'
 import { randomUUID } from 'node:crypto'
-import { evaluate } from '../engine/index.js'
+import { evaluate, evaluateNode } from '../engine/index.js'
+import type { PolicyNode } from '../engine/composite.js'
 import { checkCapLock, checkMetadata } from '../engine/checks.js'
 import { noopTelemetry } from '../telemetry/noop.js'
 import type { AdapterMap } from './adapter.js'
@@ -84,6 +85,7 @@ export async function runPipeline(
   receiptStore?: ReceiptStore,
   auditLog?: PipelineAuditLog,
   telemetryProvider?: TelemetryProvider,
+  policyNode?: PolicyNode,
 ): Promise<ExecutionResult> {
   const telemetry = telemetryProvider ?? noopTelemetry
   const pipelineSpan = telemetry.startSpan('txfence.pipeline', {
@@ -105,7 +107,18 @@ export async function runPipeline(
         'txfence.chain': action.chain,
         'txfence.action.kind': action.kind,
       })
-      let evaluation = evaluate(boundAction)
+      let evaluation: PolicyEvaluation
+      if (policyNode !== undefined) {
+        const nodeEval = evaluateNode(policyNode, action)
+        const reason = nodeEval.firstRejectionReason
+        evaluation = nodeEval.leaf ?? {
+          passed: nodeEval.passed,
+          checksRun: ['composite'],
+          ...(reason !== undefined ? { rejectionReason: reason } : {}),
+        }
+      } else {
+        evaluation = evaluate(boundAction)
+      }
       auditEvaluation = evaluation
       evalSpan.setAttribute('txfence.evaluation.passed', evaluation.passed)
       if (evaluation.rejectionReason !== undefined) {
@@ -185,7 +198,17 @@ export async function runPipeline(
           return { status: 'simulation_failed', action, simulation: simulationResult }
         }
 
-        evaluation = evaluate(boundAction, simulationResult)
+        if (policyNode !== undefined) {
+          const nodeEval = evaluateNode(policyNode, action, simulationResult)
+          const reason = nodeEval.firstRejectionReason
+          evaluation = nodeEval.leaf ?? {
+            passed: nodeEval.passed,
+            checksRun: ['composite'],
+            ...(reason !== undefined ? { rejectionReason: reason } : {}),
+          }
+        } else {
+          evaluation = evaluate(boundAction, simulationResult)
+        }
         auditEvaluation = evaluation
         if (!evaluation.passed) {
           pipelineSpan.setAttribute('txfence.status', 'policy_rejected')

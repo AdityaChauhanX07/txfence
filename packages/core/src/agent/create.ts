@@ -10,6 +10,7 @@ import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider } from '../approval/types.js'
 import type { TelemetryProvider } from '../telemetry/types.js'
 import { runPipeline } from './pipeline.js'
+import type { PolicyNode } from '../engine/composite.js'
 
 type AuditLogLike = Parameters<typeof runPipeline>[9]
 
@@ -31,6 +32,7 @@ export function createAgent(
   auditLog?: AuditLogLike,
   telemetryProvider?: TelemetryProvider,
   capLockConfigs?: CapConfig[],
+  policyNode?: PolicyNode,
 ): Agent {
   let inFlight = 0
   let completed = 0
@@ -56,6 +58,7 @@ export function createAgent(
         receiptStore,
         auditLog,
         telemetryProvider,
+        policyNode,
       )
       completed++
       return result
