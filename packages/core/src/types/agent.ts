@@ -1,5 +1,5 @@
 import type { Policy, ChainId } from './policy.js'
-import type { Action, BoundAction } from './action.js'
+import type { Action } from './action.js'
 import type { ExecutionResult } from './receipt.js'
 
 export type AgentConfig = {
@@ -23,7 +23,22 @@ export type SerializedTransaction = {
   rpcUrl: string
 }
 
+export type AgentShutdownResult = {
+  completed: number
+  abandoned: number
+  capLocksReleased: number
+}
+
+export type AgentHealth = {
+  status: 'healthy' | 'shutting_down'
+  inFlight: number
+  uptime: number
+}
+
 export type Agent = {
-  submit: (action: BoundAction) => Promise<ExecutionResult>
+  submit: (input: { action: Action; policy: Policy }) => Promise<ExecutionResult>
+  shutdown: (timeoutMs?: number) => Promise<AgentShutdownResult>
+  isShuttingDown: () => boolean
+  health: () => AgentHealth
   config: AgentConfig
 }

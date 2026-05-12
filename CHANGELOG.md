@@ -4,6 +4,24 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.24.0
+
+TelemetryProvider interface and pipeline instrumentation.
+
+- Added `TelemetryProvider` interface to `@txfence/core` — minimal span-based observability interface
+- `Span` type with `setAttribute`, `setStatus`, and `end` methods — structurally compatible with OpenTelemetry spans
+- `noopTelemetry` — singleton no-op implementation with zero allocations; `startSpan` always returns the same shared `noopSpan` object
+- Pipeline instrumented with 5 spans: `txfence.pipeline` (root), `txfence.policy.evaluate`, `txfence.simulation`, `txfence.approval`, `txfence.execution`
+- Root span attributes: `txfence.chain`, `txfence.action.kind`, `txfence.status`, `txfence.rejection_reason`, `txfence.tx_hash`, `txfence.confirmed_at_block`, `txfence.staleness_ms`
+- Simulation span attributes: `txfence.simulation.provider`, `txfence.simulation.coverage`, `txfence.simulation.gas_estimate`, `txfence.simulation.would_revert`
+- `pipelineSpan.end()` called in `finally` — guaranteed on every exit path including errors
+- `telemetryProvider` is optional 11th parameter on `runPipeline` and `createAgent` — zero overhead when not configured
+- All existing tests pass with no regressions — noopTelemetry is the default
+- 8 new tests covering noop correctness, pipeline span lifecycle, attribute recording, and no-telemetry regression
+- A `@txfence/telemetry-otel` package providing real OpenTelemetry implementation is planned
+
+---
+
 ## v0.23.0
 
 Domain-aware policy configuration validation.
