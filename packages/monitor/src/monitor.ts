@@ -7,6 +7,7 @@ import type {
   MonitorStatus,
   MonitorChainStatus,
   UnrecordedTransactionEvent,
+  ReorgEvent,
 } from './types.js'
 import { scanBlockRange } from './scanner.js'
 import { reconcileReceipts } from './reconciler.js'
@@ -70,6 +71,7 @@ export function createMonitor(config: MonitorConfig): Monitor {
           severity: 'warning',
         }
         config.onUnrecordedTransaction(event)
+        void config.notificationProvider?.notify({ kind: 'monitor_unrecorded', ...event })
       } else {
         const firstSeen = pending.get(tx.txHash)!
         if (Date.now() - firstSeen > gracePeriodMs) {
@@ -85,6 +87,7 @@ export function createMonitor(config: MonitorConfig): Monitor {
           }
           config.onUnrecordedTransaction(event)
           config.onCriticalTransaction?.(event)
+          void config.notificationProvider?.notify({ kind: 'monitor_unrecorded', ...event })
           pending.delete(tx.txHash)
         }
       }
@@ -107,13 +110,27 @@ export function createMonitor(config: MonitorConfig): Monitor {
     }
   }
 
+  function makeReorgHandler(): ((event: ReorgEvent) => void) | undefined {
+    if (config.onReorgDetected === undefined && config.notificationProvider === undefined) return undefined
+    return (event: ReorgEvent): void => {
+      config.onReorgDetected?.(event)
+      void config.notificationProvider?.notify({
+        kind: 'monitor_reorg',
+        chain: event.chain,
+        txHash: event.txHash,
+        originalBlock: event.originalBlock,
+        detectedAt: event.detectedAt,
+      })
+    }
+  }
+
   async function reconcileLoop(): Promise<void> {
     if (!running) return
     try {
       await Promise.all(config.chains.map(chain => {
         const rpcUrl = config.rpcUrls[chain]
         if (!rpcUrl) return Promise.resolve()
-        return reconcileReceipts(chain, rpcUrl, config.receiptStore, 100, config.onReorgDetected)
+        return reconcileReceipts(chain, rpcUrl, config.receiptStore, 100, makeReorgHandler())
       }))
     } catch (err) {
       console.error('[txfence/monitor] reconcile error:', err)

@@ -8,6 +8,7 @@ import type { SimulationResult } from '../types/simulation.js'
 import type { AdapterMap } from './adapter.js'
 import type { CapLockProvider } from '../caps/provider.js'
 import type { TelemetryProvider } from '../telemetry/types.js'
+import type { NotificationProvider } from '../notifications/types.js'
 import type { DryRunResult, DryRunBlocker } from './dry-run.js'
 import { noopTelemetry } from '../telemetry/noop.js'
 
@@ -27,6 +28,7 @@ export async function runDryRun(
   capLockProvider?: CapLockProvider,
   policyNode?: PolicyNode,
   telemetryProvider?: TelemetryProvider,
+  _notificationProvider?: NotificationProvider,
 ): Promise<DryRunResult> {
   const telemetry = telemetryProvider ?? noopTelemetry
   const dryRunSpan = telemetry.startSpan('txfence.dry_run', {

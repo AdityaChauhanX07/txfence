@@ -9,6 +9,7 @@ import type { MetadataVerifier } from '../verification/provider.js'
 import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider } from '../approval/types.js'
 import type { TelemetryProvider } from '../telemetry/types.js'
+import type { NotificationProvider } from '../notifications/types.js'
 import { runPipeline } from './pipeline.js'
 import { runDryRun } from './run-dry.js'
 import type { PolicyNode } from '../engine/composite.js'
@@ -35,6 +36,7 @@ export function createAgent(
   telemetryProvider?: TelemetryProvider,
   capLockConfigs?: CapConfig[],
   policyNode?: PolicyNode,
+  notificationProvider?: NotificationProvider,
 ): Agent {
   let inFlight = 0
   let completed = 0
@@ -51,6 +53,7 @@ export function createAgent(
       capLockProvider,
       policyNode,
       telemetryProvider,
+      notificationProvider,
     )
   }
 
@@ -73,6 +76,7 @@ export function createAgent(
         auditLog,
         telemetryProvider,
         policyNode,
+        notificationProvider,
       )
       completed++
       return result

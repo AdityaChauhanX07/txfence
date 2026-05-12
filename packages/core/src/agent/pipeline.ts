@@ -8,6 +8,7 @@ import type { MetadataVerifier } from '../verification/provider.js'
 import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider, ApprovalRequest, ApprovalDecision } from '../approval/types.js'
 import type { TelemetryProvider } from '../telemetry/types.js'
+import type { NotificationProvider } from '../notifications/types.js'
 import { randomUUID } from 'node:crypto'
 import { evaluate, evaluateNode } from '../engine/index.js'
 import type { PolicyNode } from '../engine/composite.js'
@@ -86,6 +87,7 @@ export async function runPipeline(
   auditLog?: PipelineAuditLog,
   telemetryProvider?: TelemetryProvider,
   policyNode?: PolicyNode,
+  notificationProvider?: NotificationProvider,
 ): Promise<ExecutionResult> {
   const telemetry = telemetryProvider ?? noopTelemetry
   const pipelineSpan = telemetry.startSpan('txfence.pipeline', {
@@ -131,6 +133,9 @@ export async function runPipeline(
         pipelineSpan.setAttribute('txfence.status', 'policy_rejected')
         pipelineSpan.setAttribute('txfence.rejection_reason', evaluation.rejectionReason ?? '')
         pipelineSpan.setStatus('error', evaluation.rejectionReason)
+        if (evaluation.rejectionReason !== undefined) {
+          void notificationProvider?.notify({ kind: 'policy_rejected', action, reason: evaluation.rejectionReason, evaluation })
+        }
         return { status: 'policy_rejected', action, evaluation }
       }
 
@@ -214,6 +219,9 @@ export async function runPipeline(
           pipelineSpan.setAttribute('txfence.status', 'policy_rejected')
           pipelineSpan.setAttribute('txfence.rejection_reason', evaluation.rejectionReason ?? '')
           pipelineSpan.setStatus('error', evaluation.rejectionReason)
+          if (evaluation.rejectionReason !== undefined) {
+            void notificationProvider?.notify({ kind: 'policy_rejected', action, reason: evaluation.rejectionReason, evaluation })
+          }
           return { status: 'policy_rejected', action, evaluation }
         }
       }
@@ -287,6 +295,14 @@ export async function runPipeline(
         }
 
         await approvalProvider.request(approvalReq)
+        void notificationProvider?.notify({
+          kind: 'approval_requested',
+          action,
+          requestedAt: now,
+          expiresAt,
+          thresholdAmount: threshold.amount,
+          thresholdToken: threshold.token,
+        })
 
         let decision: ApprovalDecision | null = null
         let timedOut = false
@@ -310,6 +326,12 @@ export async function runPipeline(
         approvalSpan.setAttribute('txfence.approval.decision', decision ?? 'timeout')
         approvalSpan.setStatus(decision === 'approved' ? 'ok' : 'error')
         approvalSpan.end()
+
+        const finalDecision: 'approved' | 'rejected' | 'timeout' =
+          decision === 'approved' ? 'approved'
+          : decision === 'rejected' ? 'rejected'
+          : 'timeout'
+        void notificationProvider?.notify({ kind: 'approval_decision', action, decision: finalDecision, decidedAt: Date.now() })
 
         if (decision === null || decision === 'rejected') {
           pipelineSpan.setAttribute('txfence.status', 'approval_timeout')
@@ -377,6 +399,7 @@ export async function runPipeline(
           pipelineSpan.setAttribute('txfence.tx_hash', receipt.txHash)
           pipelineSpan.setAttribute('txfence.confirmed_at_block', receipt.confirmedAtBlock)
           pipelineSpan.setStatus('ok')
+          void notificationProvider?.notify({ kind: 'execution_success', receipt })
           return { status: 'success', receipt }
         } catch (err) {
           if (capLockId !== undefined && policy.capLocks !== undefined && capLockProvider !== undefined) {
@@ -389,6 +412,7 @@ export async function runPipeline(
           execSpan.setStatus('error', message)
           pipelineSpan.setAttribute('txfence.status', 'execution_failed')
           pipelineSpan.setStatus('error', message)
+          void notificationProvider?.notify({ kind: 'execution_failed', action, reason })
           return { status: 'execution_failed', action, txHash: '', reason }
         } finally {
           execSpan.end()
@@ -397,6 +421,7 @@ export async function runPipeline(
 
       pipelineSpan.setAttribute('txfence.status', 'execution_failed')
       pipelineSpan.setStatus('error', 'no executor configured')
+      void notificationProvider?.notify({ kind: 'execution_failed', action, reason: { code: 'no_executor' } })
       return {
         status: 'execution_failed',
         action,

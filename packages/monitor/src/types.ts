@@ -1,7 +1,6 @@
-import type { ChainId } from '@txfence/core'
-import type { ReceiptStore } from '@txfence/core'
+import type { ChainId, ReceiptStore, NotificationProvider } from '@txfence/core'
 
-export type { ChainId, ReceiptStore }
+export type { ChainId, ReceiptStore, NotificationProvider }
 
 export type CheckpointStore = {
   getLastBlock: (chain: ChainId) => Promise<number | null>
@@ -51,6 +50,7 @@ export type MonitorConfig = {
   onUnrecordedTransaction: (event: UnrecordedTransactionEvent) => void
   onCriticalTransaction?: (event: UnrecordedTransactionEvent) => void
   onReorgDetected?: (event: ReorgEvent) => void
+  notificationProvider?: NotificationProvider
 }
 
 export type Monitor = {

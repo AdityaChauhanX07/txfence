@@ -4,6 +4,24 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.31.0
+
+Pluggable notification provider.
+
+- Added `NotificationProvider` interface — `{ notify(event: NotificationEvent): Promise<void> }`
+- Added `NotificationEvent` discriminated union with eight variants: `policy_rejected`, `execution_success`, `execution_failed`, `approval_requested`, `approval_decision`, `cap_warning`, `monitor_unrecorded`, `monitor_reorg`
+- Added `createConsoleNotificationProvider(options?)` — logs structured one-line messages; configurable prefix and log level
+- Added `createWebhookNotificationProvider(url, options?)` — POSTs JSON payload; optional HMAC-SHA256 signature via `x-txfence-signature` header; configurable timeout and extra headers
+- Added `createCompositeNotificationProvider(...providers)` — fans out to all child providers in parallel
+- Wired into `runPipeline` as optional 13th parameter — fires `policy_rejected` on both pre- and post-simulation rejection, `approval_requested` when a human approval is dispatched, `approval_decision` on approved/rejected/timeout, `execution_success` on commit, `execution_failed` on error
+- Wired into `createAgent` as optional last parameter — passed through to `runPipeline` and `runDryRun`
+- `runDryRun` accepts `notificationProvider` parameter (reserved for future use — dry run does not fire execution events)
+- Added `notificationProvider?` to `MonitorConfig` in `@txfence/monitor` — fires `monitor_unrecorded` on both warning and critical unrecorded transactions, fires `monitor_reorg` when a reorg is detected
+- Zero breaking changes — all new parameters are optional, existing code unchanged
+- 11 new tests covering console output, composite fan-out, webhook HTTP call, HMAC signature format, and event pass-through
+
+---
+
 ## v0.30.0
 
 Explicit dry-run mode.
