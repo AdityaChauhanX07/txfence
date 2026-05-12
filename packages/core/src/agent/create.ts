@@ -12,8 +12,11 @@ import type { TelemetryProvider } from '../telemetry/types.js'
 import type { NotificationProvider } from '../notifications/types.js'
 import { runPipeline } from './pipeline.js'
 import { runDryRun } from './run-dry.js'
+import { executeIntent as runExecuteIntent } from '../intent/execute.js'
 import type { PolicyNode } from '../engine/composite.js'
 import type { DryRunResult } from './dry-run.js'
+import type { Intent, IntentExecutionResult } from '../intent/types.js'
+import type { IntentExecutionOptions } from '../intent/execute.js'
 
 type AuditLogLike = Parameters<typeof runPipeline>[9]
 
@@ -43,6 +46,33 @@ export function createAgent(
   let abandoned = 0
   let shuttingDown = false
   const startedAt = Date.now()
+
+  async function executeIntent(
+    intent: Intent,
+    overrides?: Partial<IntentExecutionOptions>,
+  ): Promise<IntentExecutionResult> {
+    if (shuttingDown) {
+      throw new Error('Agent is shutting down — no new submissions accepted')
+    }
+    const resolvedExecutor = overrides?.executor ?? executor
+    const resolvedCapLock = overrides?.capLockProvider ?? capLockProvider
+    const resolvedApproval = overrides?.approvalProvider ?? approvalProvider
+    const resolvedReceiptStore = overrides?.receiptStore ?? receiptStore
+    const resolvedAuditLog = overrides?.auditLog ?? auditLog
+    const resolvedTelemetry = overrides?.telemetryProvider ?? telemetryProvider
+    const resolvedNotification = overrides?.notificationProvider ?? notificationProvider
+    return runExecuteIntent(intent, config.policies, {
+      adapters: overrides?.adapters ?? adapters,
+      rpcUrls: overrides?.rpcUrls ?? rpcUrls,
+      ...(resolvedExecutor !== undefined ? { executor: resolvedExecutor } : {}),
+      ...(resolvedCapLock !== undefined ? { capLockProvider: resolvedCapLock } : {}),
+      ...(resolvedApproval !== undefined ? { approvalProvider: resolvedApproval } : {}),
+      ...(resolvedReceiptStore !== undefined ? { receiptStore: resolvedReceiptStore } : {}),
+      ...(resolvedAuditLog !== undefined ? { auditLog: resolvedAuditLog } : {}),
+      ...(resolvedTelemetry !== undefined ? { telemetryProvider: resolvedTelemetry } : {}),
+      ...(resolvedNotification !== undefined ? { notificationProvider: resolvedNotification } : {}),
+    })
+  }
 
   async function dryRun(input: { action: Action; policy: Policy }): Promise<DryRunResult> {
     return runDryRun(
@@ -138,5 +168,5 @@ export function createAgent(
     }
   }
 
-  return { submit, dryRun, shutdown, isShuttingDown: () => shuttingDown, health, config }
+  return { submit, dryRun, executeIntent, shutdown, isShuttingDown: () => shuttingDown, health, config }
 }

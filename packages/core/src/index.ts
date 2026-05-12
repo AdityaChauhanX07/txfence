@@ -77,6 +77,7 @@ export type {
 } from './coordination/index.js'
 export {
   evaluateIntent,
+  executeIntent,
   validateIntentGraph,
   getExecutionPlan,
   getPoisonedSteps,
@@ -87,6 +88,7 @@ export {
   isSingleTokenIntent,
   getDominantToken,
 } from './intent/index.js'
+export type { IntentExecutionOptions } from './intent/index.js'
 export type {
   Intent,
   IntentStep,

@@ -1,4 +1,6 @@
 export { evaluateIntent } from './evaluate.js'
+export { executeIntent } from './execute.js'
+export type { IntentExecutionOptions } from './execute.js'
 export { validateIntentGraph, getExecutionPlan, getPoisonedSteps, checkMaxSteps } from './graph.js'
 export {
   analyzeIntentPosition,

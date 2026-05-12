@@ -2,6 +2,8 @@ import type { Policy, ChainId } from './policy.js'
 import type { Action } from './action.js'
 import type { ExecutionResult } from './receipt.js'
 import type { DryRunResult } from '../agent/dry-run.js'
+import type { Intent, IntentExecutionResult } from '../intent/types.js'
+import type { IntentExecutionOptions } from '../intent/execute.js'
 
 export type AgentConfig = {
   chains: Policy['chains']
@@ -39,6 +41,10 @@ export type AgentHealth = {
 export type Agent = {
   submit: (input: { action: Action; policy: Policy }) => Promise<ExecutionResult>
   dryRun: (input: { action: Action; policy: Policy }) => Promise<DryRunResult>
+  executeIntent: (
+    intent: Intent,
+    options?: Partial<IntentExecutionOptions>,
+  ) => Promise<IntentExecutionResult>
   shutdown: (timeoutMs?: number) => Promise<AgentShutdownResult>
   isShuttingDown: () => boolean
   health: () => AgentHealth
