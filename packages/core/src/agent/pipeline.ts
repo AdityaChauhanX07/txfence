@@ -6,9 +6,11 @@ import type { CapLockProvider } from '../caps/provider.js'
 import type { MetadataVerifier } from '../verification/provider.js'
 import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider, ApprovalRequest, ApprovalDecision } from '../approval/types.js'
+import type { TelemetryProvider } from '../telemetry/types.js'
 import { randomUUID } from 'node:crypto'
 import { evaluate } from '../engine/index.js'
 import { checkCapLock, checkMetadata } from '../engine/checks.js'
+import { noopTelemetry } from '../telemetry/noop.js'
 import type { AdapterMap } from './adapter.js'
 
 function getSpendAmount(action: Action): bigint {
@@ -80,238 +82,319 @@ export async function runPipeline(
   approvalProvider?: ApprovalProvider,
   receiptStore?: ReceiptStore,
   auditLog?: PipelineAuditLog,
+  telemetryProvider?: TelemetryProvider,
 ): Promise<ExecutionResult> {
-  let auditEvaluation: PolicyEvaluation = { passed: false, checksRun: [] }
-  let auditSimulation: SimulationResult | undefined
-  let simulatedAt = 0
+  const telemetry = telemetryProvider ?? noopTelemetry
+  const pipelineSpan = telemetry.startSpan('txfence.pipeline', {
+    'txfence.chain': action.chain,
+    'txfence.action.kind': action.kind,
+  })
 
-  const result = await (async (): Promise<ExecutionResult> => {
-    // Step 1
-    const boundAction: BoundAction = { action, policy }
+  try {
+    let auditEvaluation: PolicyEvaluation = { passed: false, checksRun: [] }
+    let auditSimulation: SimulationResult | undefined
+    let simulatedAt = 0
 
-    // Step 2
-    let evaluation = evaluate(boundAction)
-    auditEvaluation = evaluation
-    if (!evaluation.passed && evaluation.rejectionReason !== 'simulation_required_but_failed') {
-      return { status: 'policy_rejected', action, evaluation }
-    }
+    const result = await (async (): Promise<ExecutionResult> => {
+      // Step 1
+      const boundAction: BoundAction = { action, policy }
 
-    // Step 2.5 — metadata verification
-    if (metadataVerifier !== undefined) {
-      const metadataResult = await checkMetadata(boundAction, metadataVerifier)
-      if (!metadataResult.passed) {
-        return {
-          status: 'policy_rejected',
-          action,
-          evaluation: {
-            passed: false,
-            checksRun: ['checkMetadata'],
-            ...(metadataResult.reason !== undefined ? { rejectionReason: metadataResult.reason } : {}),
-          },
-        }
-      }
-    }
-
-    // Step 3
-    let simulationResult: SimulationResult | undefined = undefined
-
-    if (policy.requireSimulation) {
-      const adapter = adapters[action.chain]
-      const rpcUrl = rpcUrls[action.chain]
-
-      if (adapter === undefined) {
-        return {
-          status: 'policy_rejected',
-          action,
-          evaluation: {
-            passed: false,
-            checksRun: ['adapter_lookup'],
-            rejectionReason: 'chain_not_allowed',
-          },
-        }
-      }
-
-      if (rpcUrl === undefined) {
-        throw new Error(`no rpcUrl configured for chain: ${action.chain}`)
-      }
-
-      simulationResult = await adapter.simulate(action, action.chain, rpcUrl)
-      simulatedAt = Date.now()
-      auditSimulation = simulationResult
-
-      if (!simulationResult.success) {
-        return { status: 'simulation_failed', action, simulation: simulationResult }
-      }
-
-      evaluation = evaluate(boundAction, simulationResult)
+      // Step 2 — policy evaluation
+      const evalSpan = telemetry.startSpan('txfence.policy.evaluate', {
+        'txfence.chain': action.chain,
+        'txfence.action.kind': action.kind,
+      })
+      let evaluation = evaluate(boundAction)
       auditEvaluation = evaluation
-      if (!evaluation.passed) {
+      evalSpan.setAttribute('txfence.evaluation.passed', evaluation.passed)
+      if (evaluation.rejectionReason !== undefined) {
+        evalSpan.setAttribute('txfence.rejection_reason', evaluation.rejectionReason)
+      }
+      evalSpan.setStatus(evaluation.passed ? 'ok' : 'error', evaluation.rejectionReason)
+      evalSpan.end()
+
+      if (!evaluation.passed && evaluation.rejectionReason !== 'simulation_required_but_failed') {
+        pipelineSpan.setAttribute('txfence.status', 'policy_rejected')
+        pipelineSpan.setAttribute('txfence.rejection_reason', evaluation.rejectionReason ?? '')
+        pipelineSpan.setStatus('error', evaluation.rejectionReason)
         return { status: 'policy_rejected', action, evaluation }
       }
-    }
 
-    // Step 3.5 — cap lock
-    let capLockId: string | undefined = undefined
-    if (capLockProvider !== undefined) {
-      const capLockResult = await checkCapLock(boundAction, capLockProvider)
-      if (!capLockResult.passed) {
-        return {
-          status: 'policy_rejected',
-          action,
-          evaluation: {
-            passed: false,
-            checksRun: ['checkCapLock'],
-            rejectionReason: 'cap_lock_unavailable',
-          },
-        }
-      }
-      capLockId = capLockResult.lockId
-    }
-
-    // Step 4 — human approval
-    const spendAmount = getSpendAmount(action)
-    const threshold = policy.humanApprovalThreshold
-
-    if (spendAmount > threshold.amount) {
-      if (approvalProvider === undefined) {
-        return { status: 'approval_timeout', action: boundAction }
-      }
-
-      const token = randomUUID()
-      const now = Date.now()
-      const expiresAt = now + policy.humanApprovalTimeoutMs
-
-      const approvalReq: ApprovalRequest = {
-        token,
-        action,
-        simulation: simulationResult !== undefined ? {
-          gasEstimate: simulationResult.gasEstimate.toString(),
-          coverageLevel: simulationResult.coverageLevel,
-          caveats: simulationResult.caveats,
-        } : {
-          gasEstimate: '0',
-          coverageLevel: 'none',
-          caveats: [],
-        },
-        policyContext: {
-          maxSpendPerTx: {
-            token: policy.maxSpendPerTx.token,
-            amount: policy.maxSpendPerTx.amount.toString(),
-          },
-          humanApprovalThreshold: {
-            token: policy.humanApprovalThreshold.token,
-            amount: policy.humanApprovalThreshold.amount.toString(),
-          },
-        },
-        requestedAt: new Date(now).toISOString(),
-        expiresAt: new Date(expiresAt).toISOString(),
-        approveUrl: '',
-        rejectUrl: '',
-      }
-
-      await approvalProvider.request(approvalReq)
-
-      let decision: ApprovalDecision | null = null
-      let timedOut = false
-      const pollIntervalMs = 50
-
-      const pollLoop = async (): Promise<void> => {
-        while (!timedOut) {
-          decision = await approvalProvider.poll(token)
-          if (decision !== null) return
-          await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs))
+      // Step 2.5 — metadata verification
+      if (metadataVerifier !== undefined) {
+        const metadataResult = await checkMetadata(boundAction, metadataVerifier)
+        if (!metadataResult.passed) {
+          pipelineSpan.setAttribute('txfence.status', 'policy_rejected')
+          pipelineSpan.setAttribute('txfence.rejection_reason', metadataResult.reason ?? '')
+          pipelineSpan.setStatus('error', metadataResult.reason)
+          return {
+            status: 'policy_rejected',
+            action,
+            evaluation: {
+              passed: false,
+              checksRun: ['checkMetadata'],
+              ...(metadataResult.reason !== undefined ? { rejectionReason: metadataResult.reason } : {}),
+            },
+          }
         }
       }
 
-      const timeoutPromise = new Promise<void>(resolve =>
-        setTimeout(() => { timedOut = true; resolve() }, policy.humanApprovalTimeoutMs)
-      )
+      // Step 3 — simulation
+      let simulationResult: SimulationResult | undefined = undefined
 
-      await Promise.race([pollLoop(), timeoutPromise])
-      timedOut = true
+      if (policy.requireSimulation) {
+        const adapter = adapters[action.chain]
+        const rpcUrl = rpcUrls[action.chain]
 
-      if (decision === null || decision === 'rejected') {
-        return { status: 'approval_timeout', action: boundAction }
-      }
-      // decision === 'approved' — fall through to execution
-    }
+        if (adapter === undefined) {
+          pipelineSpan.setAttribute('txfence.status', 'policy_rejected')
+          pipelineSpan.setAttribute('txfence.rejection_reason', 'chain_not_allowed')
+          pipelineSpan.setStatus('error', 'chain_not_allowed')
+          return {
+            status: 'policy_rejected',
+            action,
+            evaluation: {
+              passed: false,
+              checksRun: ['adapter_lookup'],
+              rejectionReason: 'chain_not_allowed',
+            },
+          }
+        }
 
-    // Step 5
-    if (
-      policy.simulationStalenessMs !== undefined &&
-      simulationResult !== undefined
-    ) {
-      const stalenessMs = Date.now() - simulatedAt
-      if (stalenessMs >= policy.simulationStalenessMs) {
-        return {
-          status: 'simulation_stale',
-          action,
-          simulation: simulationResult,
-          stalenessMs,
+        if (rpcUrl === undefined) {
+          throw new Error(`no rpcUrl configured for chain: ${action.chain}`)
+        }
+
+        const simSpan = telemetry.startSpan('txfence.simulation', {
+          'txfence.chain': action.chain,
+        })
+        simulationResult = await adapter.simulate(action, action.chain, rpcUrl)
+        simulatedAt = Date.now()
+        auditSimulation = simulationResult
+        simSpan.setAttribute('txfence.simulation.provider', simulationResult.provider)
+        simSpan.setAttribute('txfence.simulation.coverage', simulationResult.coverageLevel)
+        simSpan.setAttribute('txfence.simulation.gas_estimate', Number(simulationResult.gasEstimate))
+        simSpan.setAttribute('txfence.simulation.would_revert', simulationResult.wouldRevert)
+        simSpan.setStatus(simulationResult.success ? 'ok' : 'error')
+        simSpan.end()
+
+        if (!simulationResult.success) {
+          pipelineSpan.setAttribute('txfence.status', 'simulation_failed')
+          pipelineSpan.setStatus('error', 'simulation failed')
+          return { status: 'simulation_failed', action, simulation: simulationResult }
+        }
+
+        evaluation = evaluate(boundAction, simulationResult)
+        auditEvaluation = evaluation
+        if (!evaluation.passed) {
+          pipelineSpan.setAttribute('txfence.status', 'policy_rejected')
+          pipelineSpan.setAttribute('txfence.rejection_reason', evaluation.rejectionReason ?? '')
+          pipelineSpan.setStatus('error', evaluation.rejectionReason)
+          return { status: 'policy_rejected', action, evaluation }
         }
       }
-    }
 
-    if (executor !== undefined) {
-      const rpcUrl = rpcUrls[action.chain]
-      if (rpcUrl === undefined) throw new Error(`no rpcUrl configured for chain: ${action.chain}`)
-      try {
-        const receipt = await executor(
+      // Step 3.5 — cap lock
+      let capLockId: string | undefined = undefined
+      if (capLockProvider !== undefined) {
+        const capLockResult = await checkCapLock(boundAction, capLockProvider)
+        if (!capLockResult.passed) {
+          pipelineSpan.setAttribute('txfence.status', 'policy_rejected')
+          pipelineSpan.setAttribute('txfence.rejection_reason', 'cap_lock_unavailable')
+          pipelineSpan.setStatus('error', 'cap_lock_unavailable')
+          return {
+            status: 'policy_rejected',
+            action,
+            evaluation: {
+              passed: false,
+              checksRun: ['checkCapLock'],
+              rejectionReason: 'cap_lock_unavailable',
+            },
+          }
+        }
+        capLockId = capLockResult.lockId
+      }
+
+      // Step 4 — human approval
+      const spendAmount = getSpendAmount(action)
+      const threshold = policy.humanApprovalThreshold
+
+      if (spendAmount > threshold.amount) {
+        if (approvalProvider === undefined) {
+          pipelineSpan.setAttribute('txfence.status', 'approval_timeout')
+          pipelineSpan.setStatus('error', 'approval timeout')
+          return { status: 'approval_timeout', action: boundAction }
+        }
+
+        const approvalSpan = telemetry.startSpan('txfence.approval', {
+          'txfence.chain': action.chain,
+        })
+
+        const token = randomUUID()
+        const now = Date.now()
+        const expiresAt = now + policy.humanApprovalTimeoutMs
+
+        const approvalReq: ApprovalRequest = {
+          token,
           action,
-          action.chain,
-          rpcUrl,
-          evaluation,
-          simulationResult ?? {
-            success: true,
-            wouldRevert: false,
-            chain: action.chain,
-            simulatedAtBlock: 0,
-            gasEstimate: 0n,
-            gasBufferApplied: 1,
+          simulation: simulationResult !== undefined ? {
+            gasEstimate: simulationResult.gasEstimate.toString(),
+            coverageLevel: simulationResult.coverageLevel,
+            caveats: simulationResult.caveats,
+          } : {
+            gasEstimate: '0',
             coverageLevel: 'none',
             caveats: [],
-            provider: 'eth_call',
           },
+          policyContext: {
+            maxSpendPerTx: {
+              token: policy.maxSpendPerTx.token,
+              amount: policy.maxSpendPerTx.amount.toString(),
+            },
+            humanApprovalThreshold: {
+              token: policy.humanApprovalThreshold.token,
+              amount: policy.humanApprovalThreshold.amount.toString(),
+            },
+          },
+          requestedAt: new Date(now).toISOString(),
+          expiresAt: new Date(expiresAt).toISOString(),
+          approveUrl: '',
+          rejectUrl: '',
+        }
+
+        await approvalProvider.request(approvalReq)
+
+        let decision: ApprovalDecision | null = null
+        let timedOut = false
+        const pollIntervalMs = 50
+
+        const pollLoop = async (): Promise<void> => {
+          while (!timedOut) {
+            decision = await approvalProvider.poll(token)
+            if (decision !== null) return
+            await new Promise<void>(resolve => setTimeout(resolve, pollIntervalMs))
+          }
+        }
+
+        const timeoutPromise = new Promise<void>(resolve =>
+          setTimeout(() => { timedOut = true; resolve() }, policy.humanApprovalTimeoutMs)
         )
-        if (capLockId !== undefined && policy.capLocks !== undefined && capLockProvider !== undefined) {
-          for (const capLock of policy.capLocks) {
-            await capLockProvider.commit(capLock.capId, capLockId, spendAmount)
-          }
+
+        await Promise.race([pollLoop(), timeoutPromise])
+        timedOut = true
+
+        approvalSpan.setAttribute('txfence.approval.decision', decision ?? 'timeout')
+        approvalSpan.setStatus(decision === 'approved' ? 'ok' : 'error')
+        approvalSpan.end()
+
+        if (decision === null || decision === 'rejected') {
+          pipelineSpan.setAttribute('txfence.status', 'approval_timeout')
+          pipelineSpan.setStatus('error', 'approval timeout')
+          return { status: 'approval_timeout', action: boundAction }
         }
-        if (receiptStore !== undefined) {
-          await receiptStore.save(receipt)
-        }
-        return { status: 'success', receipt }
-      } catch (err) {
-        if (capLockId !== undefined && policy.capLocks !== undefined && capLockProvider !== undefined) {
-          for (const capLock of policy.capLocks) {
-            await capLockProvider.release(capLock.capId, capLockId, spendAmount)
-          }
-        }
-        const reason = err instanceof Error ? err.message : String(err)
-        return { status: 'execution_failed', action, txHash: '', reason }
+        // decision === 'approved' — fall through to execution
       }
-    }
-    return {
-      status: 'execution_failed',
-      action,
-      txHash: '',
-      reason: 'signing and broadcasting not yet implemented',
-    }
-  })()
 
-  if (auditLog !== undefined) {
-    const auditEval = result.status === 'policy_rejected' ? result.evaluation : auditEvaluation
-    await auditLog.record({
-      id: randomUUID(),
-      timestamp: Date.now(),
-      action,
-      policySnapshot: policy,
-      evaluation: auditEval,
-      ...(auditSimulation !== undefined ? { simulation: auditSimulation } : {}),
-      outcome: buildAuditOutcome(result),
-    })
+      // Step 5 — staleness check
+      if (
+        policy.simulationStalenessMs !== undefined &&
+        simulationResult !== undefined
+      ) {
+        const stalenessMs = Date.now() - simulatedAt
+        if (stalenessMs >= policy.simulationStalenessMs) {
+          pipelineSpan.setAttribute('txfence.status', 'simulation_stale')
+          pipelineSpan.setAttribute('txfence.staleness_ms', stalenessMs)
+          pipelineSpan.setStatus('error', 'simulation stale')
+          return {
+            status: 'simulation_stale',
+            action,
+            simulation: simulationResult,
+            stalenessMs,
+          }
+        }
+      }
+
+      if (executor !== undefined) {
+        const rpcUrl = rpcUrls[action.chain]
+        if (rpcUrl === undefined) throw new Error(`no rpcUrl configured for chain: ${action.chain}`)
+
+        const execSpan = telemetry.startSpan('txfence.execution', {
+          'txfence.chain': action.chain,
+          'txfence.action.kind': action.kind,
+        })
+        try {
+          const receipt = await executor(
+            action,
+            action.chain,
+            rpcUrl,
+            evaluation,
+            simulationResult ?? {
+              success: true,
+              wouldRevert: false,
+              chain: action.chain,
+              simulatedAtBlock: 0,
+              gasEstimate: 0n,
+              gasBufferApplied: 1,
+              coverageLevel: 'none',
+              caveats: [],
+              provider: 'eth_call',
+            },
+          )
+          execSpan.setStatus('ok')
+          if (capLockId !== undefined && policy.capLocks !== undefined && capLockProvider !== undefined) {
+            for (const capLock of policy.capLocks) {
+              await capLockProvider.commit(capLock.capId, capLockId, spendAmount)
+            }
+          }
+          if (receiptStore !== undefined) {
+            await receiptStore.save(receipt)
+          }
+          pipelineSpan.setAttribute('txfence.status', 'success')
+          pipelineSpan.setAttribute('txfence.tx_hash', receipt.txHash)
+          pipelineSpan.setAttribute('txfence.confirmed_at_block', receipt.confirmedAtBlock)
+          pipelineSpan.setStatus('ok')
+          return { status: 'success', receipt }
+        } catch (err) {
+          if (capLockId !== undefined && policy.capLocks !== undefined && capLockProvider !== undefined) {
+            for (const capLock of policy.capLocks) {
+              await capLockProvider.release(capLock.capId, capLockId, spendAmount)
+            }
+          }
+          const reason = err instanceof Error ? err.message : String(err)
+          execSpan.setStatus('error', reason)
+          pipelineSpan.setAttribute('txfence.status', 'execution_failed')
+          pipelineSpan.setStatus('error', reason)
+          return { status: 'execution_failed', action, txHash: '', reason }
+        } finally {
+          execSpan.end()
+        }
+      }
+
+      pipelineSpan.setAttribute('txfence.status', 'execution_failed')
+      pipelineSpan.setStatus('error', 'signing and broadcasting not yet implemented')
+      return {
+        status: 'execution_failed',
+        action,
+        txHash: '',
+        reason: 'signing and broadcasting not yet implemented',
+      }
+    })()
+
+    if (auditLog !== undefined) {
+      const auditEval = result.status === 'policy_rejected' ? result.evaluation : auditEvaluation
+      await auditLog.record({
+        id: randomUUID(),
+        timestamp: Date.now(),
+        action,
+        policySnapshot: policy,
+        evaluation: auditEval,
+        ...(auditSimulation !== undefined ? { simulation: auditSimulation } : {}),
+        outcome: buildAuditOutcome(result),
+      })
+    }
+
+    return result
+  } finally {
+    pipelineSpan.end()
   }
-
-  return result
 }

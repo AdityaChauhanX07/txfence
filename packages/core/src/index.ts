@@ -46,3 +46,5 @@ export { receiptStoreContract, capLockProviderContract, auditLogContract, approv
 export type { MinimalAuditLog } from './contracts/index.js'
 export { validateConfig } from './validation/index.js'
 export type { ConfigValidationResult, ConfigWarning, ConfigWarningSeverity } from './validation/index.js'
+export { noopTelemetry } from './telemetry/index.js'
+export type { TelemetryProvider, Span, SpanStatus } from './telemetry/index.js'

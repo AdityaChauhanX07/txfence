@@ -8,6 +8,7 @@ import type { CapLockProvider } from '../caps/provider.js'
 import type { MetadataVerifier } from '../verification/provider.js'
 import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider } from '../approval/types.js'
+import type { TelemetryProvider } from '../telemetry/types.js'
 import { runPipeline } from './pipeline.js'
 
 type AuditLogLike = Parameters<typeof runPipeline>[9]
@@ -28,6 +29,7 @@ export function createAgent(
   approvalProvider?: ApprovalProvider,
   receiptStore?: ReceiptStore,
   auditLog?: AuditLogLike,
+  telemetryProvider?: TelemetryProvider,
 ): Agent {
   return {
     config,
@@ -43,6 +45,7 @@ export function createAgent(
         approvalProvider,
         receiptStore,
         auditLog,
+        telemetryProvider,
       ),
   }
 }
