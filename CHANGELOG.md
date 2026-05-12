@@ -4,6 +4,51 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.36.0
+
+Intent-level execution — Pass 1, 2, and 3 complete.
+
+**Intent primitives (@txfence/core)**
+- Added `Intent`, `IntentStep`, `IntentPolicy` types — declare multi-step operations as a directed acyclic graph
+- Added `IntentPolicy` with `maxTotalGrossSpend`, `maxNetSpend`, `maxIntermediateExposure`, `maxSteps`, `requireAllSteps`, `maxDurationMs`, `allowedChains` constraints
+- Added `validateIntentGraph(intent)` — detects cycles, duplicate IDs, missing dependencies; returns topologically sorted execution plan via Kahn's algorithm
+- Added `getPoisonedSteps(failedStepId, steps)` — returns all steps transitively dependent on a failed step
+- Added `getActionPositionChanges(action)` — extracts position changes (outflows) from any action kind
+- Added `analyzeIntentPosition(steps, executionPlan)` — tracks gross outflow, net change, intermediate exposure at each step
+- Added `isSingleTokenIntent(steps)` and `getDominantToken(steps)` — single-token detection for v1 spend constraints
+- Added `evaluateIntent(intent, txPolicy, simulationResults?)` — evaluates graph structure, per-step policies, and intent-level constraints
+- Added `IntentEvaluationResult`, `IntentPolicyEvaluationResult`, `StepEvaluationResult`, `IntentRejectionReason` types
+- 44 new tests across graph, position, and evaluate modules
+
+**Intent execution engine (@txfence/core)**
+- Added `executeIntent(intent, txPolicy, options)` — runs steps in topological order via existing `runPipeline`
+- Handles partial completion: required step failures poison downstream steps; optional step failures do not
+- Enforces `maxDurationMs` timeout — remaining steps are marked `abandoned`
+- Collects receipts per step in `IntentExecutionResult.receipts`
+- Added `IntentExecutionResult`, `IntentExecutionStatus`, `StepExecutionResult` types
+- Each step's audit log entry includes `intentId` and `intentStepId` for compliance tracing
+- Added `agent.executeIntent(intent, options?)` — wires intent execution into the agent with all closure-captured config
+- `agent.executeIntent` respects the shutting-down flag — throws if called after `agent.shutdown()`
+- 9 execution tests + 3 audit integration tests
+
+**CLI (@txfence/cli)**
+- Added `txfence intent validate` — validates graph structure and policy, prints position analysis
+- Added `txfence intent submit` — executes an intent from a JSON file; `--dry-run` flag evaluates without executing; `--json` for machine-readable output
+- Exits 0 on completed, 2 on partial, 1 on failed/rejected
+- Added `examples/treasury-agent/example-intent.json` — two-step USDC transfer + Uniswap swap example
+
+**MCP (@txfence/mcp)**
+- Added `txfence_validate_intent` tool — graph validation + policy evaluation + position analysis for AI assistants
+- Added `txfence_execute_intent` tool — dry run (default) or real execution; returns structured step-by-step report
+- `TxfenceConfig` gains optional `executor` field for intent execution
+
+**Known limitations in v1:**
+- Multi-token spend constraints require a price oracle — `maxTotalGrossSpend` and `maxNetSpend` only enforced for single-token intents
+- Swap inflows (received token amounts) are unknown at evaluation time — position analysis tracks outflows only
+- Cap lock budget reservation for whole-intent upfront is deferred to v2
+
+---
+
 ## v0.33.0
 
 Multi-agent coordination.
