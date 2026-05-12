@@ -10,7 +10,9 @@ import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider } from '../approval/types.js'
 import type { TelemetryProvider } from '../telemetry/types.js'
 import { runPipeline } from './pipeline.js'
+import { runDryRun } from './run-dry.js'
 import type { PolicyNode } from '../engine/composite.js'
+import type { DryRunResult } from './dry-run.js'
 
 type AuditLogLike = Parameters<typeof runPipeline>[9]
 
@@ -39,6 +41,18 @@ export function createAgent(
   let abandoned = 0
   let shuttingDown = false
   const startedAt = Date.now()
+
+  async function dryRun(input: { action: Action; policy: Policy }): Promise<DryRunResult> {
+    return runDryRun(
+      input.action,
+      input.policy,
+      adapters,
+      rpcUrls,
+      capLockProvider,
+      policyNode,
+      telemetryProvider,
+    )
+  }
 
   async function submit(input: { action: Action; policy: Policy }): Promise<ExecutionResult> {
     if (shuttingDown) {
@@ -120,5 +134,5 @@ export function createAgent(
     }
   }
 
-  return { submit, shutdown, isShuttingDown: () => shuttingDown, health, config }
+  return { submit, dryRun, shutdown, isShuttingDown: () => shuttingDown, health, config }
 }
