@@ -44,3 +44,5 @@ export {
 } from './serialization/index.js'
 export { receiptStoreContract, capLockProviderContract, auditLogContract, approvalProviderContract } from './contracts/index.js'
 export type { MinimalAuditLog } from './contracts/index.js'
+export { validateConfig } from './validation/index.js'
+export type { ConfigValidationResult, ConfigWarning, ConfigWarningSeverity } from './validation/index.js'
