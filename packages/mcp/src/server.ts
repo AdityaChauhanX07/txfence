@@ -8,6 +8,7 @@ import { registerGetReceiptTool } from './tools/get-receipt.js'
 import { registerExplainRejectionTool } from './tools/explain-rejection.js'
 import { registerDiffPoliciesTool } from './tools/diff-policies.js'
 import { registerValidateConfigTool } from './tools/validate-config.js'
+import { registerIntentTools } from './tools/intent.js'
 
 export async function startServer(config: TxfenceConfig): Promise<void> {
   const server = new McpServer({ name: 'txfence', version: '0.0.1' })
@@ -19,6 +20,7 @@ export async function startServer(config: TxfenceConfig): Promise<void> {
   registerExplainRejectionTool(server, config)
   registerDiffPoliciesTool(server, config)
   registerValidateConfigTool(server, config)
+  registerIntentTools(server, config)
 
   const transport = new StdioServerTransport()
   await server.connect(transport)

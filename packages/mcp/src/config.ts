@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'url'
 import { z } from 'zod'
-import type { Policy, ChainId, AdapterMap, CapLockProvider, MetadataVerifier, Signer } from '@txfence/core'
+import type { Policy, ChainId, AdapterMap, CapLockProvider, MetadataVerifier, Signer, IntentExecutionOptions } from '@txfence/core'
 
 export type TxfenceConfig = {
   chains: ChainId[]
@@ -10,6 +10,7 @@ export type TxfenceConfig = {
   signer?: Signer
   capLockProvider?: CapLockProvider
   metadataVerifier?: MetadataVerifier
+  executor?: IntentExecutionOptions['executor']
 }
 
 export function defineConfig(config: TxfenceConfig): TxfenceConfig {
