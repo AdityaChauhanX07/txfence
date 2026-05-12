@@ -28,6 +28,8 @@ export type AuditEntry = {
   approvalDecision?: ApprovalDecision
   outcome: AuditOutcome
   policyVersionId?: string
+  intentId?: string
+  intentStepId?: string
 }
 
 export type AuditFilter = {

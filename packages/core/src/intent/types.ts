@@ -139,6 +139,7 @@ export type IntentExecutionResult = {
   skippedStepIds: string[]
   receipts: Record<string, SuccessReceipt>
   positionAnalysis: IntentPositionAnalysis
+  intentEvaluation: IntentEvaluationResult
   startedAt: number
   completedAt: number
   durationMs: number

@@ -61,6 +61,7 @@ export async function executeIntent(
       skippedStepIds: intent.steps.map(s => s.id),
       receipts: {},
       positionAnalysis: analyzeIntentPosition(intent.steps, []),
+      intentEvaluation: evaluation,
       startedAt,
       completedAt,
       durationMs: completedAt - startedAt,
@@ -116,6 +117,7 @@ export async function executeIntent(
         options.telemetryProvider,
         undefined,
         options.notificationProvider,
+        { intentId: intent.id, stepId: step.id },
       )
 
       if (result.status === 'success') {
@@ -181,6 +183,7 @@ export async function executeIntent(
     skippedStepIds,
     receipts,
     positionAnalysis,
+    intentEvaluation: evaluation,
     startedAt,
     completedAt,
     durationMs: completedAt - startedAt,

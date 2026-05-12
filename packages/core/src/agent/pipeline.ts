@@ -43,6 +43,8 @@ type PipelineAuditLog = {
     evaluation: PolicyEvaluation
     simulation?: SimulationResult
     outcome: PipelineAuditOutcome
+    intentId?: string
+    intentStepId?: string
   }) => Promise<void>
 }
 
@@ -88,6 +90,7 @@ export async function runPipeline(
   telemetryProvider?: TelemetryProvider,
   policyNode?: PolicyNode,
   notificationProvider?: NotificationProvider,
+  intentContext?: { intentId: string; stepId: string },
 ): Promise<ExecutionResult> {
   const telemetry = telemetryProvider ?? noopTelemetry
   const pipelineSpan = telemetry.startSpan('txfence.pipeline', {
@@ -440,6 +443,10 @@ export async function runPipeline(
         evaluation: auditEval,
         ...(auditSimulation !== undefined ? { simulation: auditSimulation } : {}),
         outcome: buildAuditOutcome(result),
+        ...(intentContext !== undefined ? {
+          intentId: intentContext.intentId,
+          intentStepId: intentContext.stepId,
+        } : {}),
       })
     }
 
