@@ -59,3 +59,9 @@ export type { ConsoleNotificationOptions } from './notifications/index.js'
 export { createWebhookNotificationProvider } from './notifications/index.js'
 export type { WebhookNotificationOptions } from './notifications/index.js'
 export { createCompositeNotificationProvider } from './notifications/index.js'
+export {
+  getPolicyVersionId,
+  createPolicyVersion,
+  createPolicyVersionStore,
+} from './versioning/index.js'
+export type { PolicyVersion, PolicyVersionStore } from './versioning/index.js'

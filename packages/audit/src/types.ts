@@ -27,6 +27,7 @@ export type AuditEntry = {
   approvalRequest?: ApprovalRequest
   approvalDecision?: ApprovalDecision
   outcome: AuditOutcome
+  policyVersionId?: string
 }
 
 export type AuditFilter = {

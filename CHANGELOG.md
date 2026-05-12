@@ -4,6 +4,22 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.32.0
+
+Policy versioning with stable hash-based identifiers.
+
+- Added `getPolicyVersionId(policy)` — returns a 64-character SHA-256 hex digest of the canonical policy JSON; stable regardless of property definition order
+- Canonical form sorts all keys deeply and serializes `bigint` fields as strings so two structurally identical policies always produce the same ID
+- Added `createPolicyVersion(policy, meta?)` — wraps a policy with its ID, `createdAt` timestamp, and optional `label` / `author` metadata
+- Added `PolicyVersion` type — `{ id, policy, createdAt, label?, author? }`
+- Added `createPolicyVersionStore()` — in-memory registry; supports `register`, `get(id)`, `list()` (sorted by `createdAt` descending), and `getByPolicy(policy)`
+- Added `PolicyVersionStore` type
+- Added `policyVersionId?: string` to `AuditEntry` in `@txfence/audit` — additive; existing entries without the field remain valid
+- Added `txfence policy-snapshot` CLI command — prints the version ID and a policy summary; `--json` flag for machine-readable output; `--label` and `--author` flags for metadata
+- 14 new tests covering hash stability, property-order invariance, bigint handling, metadata round-trip, store CRUD, and descending sort
+
+---
+
 ## v0.31.0
 
 Pluggable notification provider.
