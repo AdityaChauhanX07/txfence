@@ -1,0 +1,34 @@
+{
+  "id": "treasury-rebalance-001",
+  "label": "Rebalance: USDC -> ETH position",
+  "steps": [
+    {
+      "id": "check-balance",
+      "label": "Verify USDC balance sufficient",
+      "action": {
+        "kind": "transfer",
+        "chain": "ethereum",
+        "token": { "token": "USDC", "amount": "1000000", "decimals": 6 },
+        "to": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+      }
+    },
+    {
+      "id": "swap-usdc-eth",
+      "label": "Swap USDC for ETH via Uniswap",
+      "dependsOn": ["check-balance"],
+      "action": {
+        "kind": "swap",
+        "chain": "ethereum",
+        "from": { "token": "USDC", "amount": "5000000", "decimals": 6 },
+        "to": "ETH",
+        "via": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+        "maxSlippage": 50
+      }
+    }
+  ],
+  "intentPolicy": {
+    "maxTotalGrossSpend": { "token": "USDC", "amount": "6000000", "decimals": 6 },
+    "maxSteps": 5,
+    "requireAllSteps": true
+  }
+}

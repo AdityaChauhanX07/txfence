@@ -9,6 +9,7 @@ import { makeInitCommand } from './commands/init.js'
 import { makeDiffCommand } from './commands/diff.js'
 import { makeDryRunCommand } from './commands/dry-run.js'
 import { makePolicySnapshotCommand } from './commands/policy-snapshot.js'
+import { makeIntentCommand } from './commands/intent.js'
 
 const program = new Command()
   .name('txfence')
@@ -23,5 +24,6 @@ program.addCommand(makeInitCommand())
 program.addCommand(makeDiffCommand())
 program.addCommand(makeDryRunCommand())
 program.addCommand(makePolicySnapshotCommand())
+program.addCommand(makeIntentCommand())
 
 program.parse(process.argv)
