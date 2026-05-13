@@ -60,9 +60,8 @@ export type ReplayableAuditLog = {
   query: (filter?: {
     from?: number
     to?: number
-    status?: string
-    actionKind?: string
-    chain?: string
+    actionKind?: Action['kind']
+    chain?: ChainId
   }) => Promise<Array<{
     id: string
     timestamp: number

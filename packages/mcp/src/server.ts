@@ -10,6 +10,7 @@ import { registerDiffPoliciesTool } from './tools/diff-policies.js'
 import { registerValidateConfigTool } from './tools/validate-config.js'
 import { registerIntentTools } from './tools/intent.js'
 import { registerForkSimulateTool } from './tools/fork-simulate.js'
+import { registerReplayTool } from './tools/replay.js'
 
 export async function startServer(config: TxfenceConfig): Promise<void> {
   const server = new McpServer({ name: 'txfence', version: '0.0.1' })
@@ -23,6 +24,7 @@ export async function startServer(config: TxfenceConfig): Promise<void> {
   registerValidateConfigTool(server, config)
   registerIntentTools(server, config)
   registerForkSimulateTool(server, config)
+  registerReplayTool(server, config)
 
   const transport = new StdioServerTransport()
   await server.connect(transport)

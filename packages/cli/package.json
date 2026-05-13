@@ -23,6 +23,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@txfence/audit": "workspace:*",
     "@txfence/core": "workspace:*",
     "@txfence/evm": "workspace:*",
     "@txfence/mcp": "workspace:*",
