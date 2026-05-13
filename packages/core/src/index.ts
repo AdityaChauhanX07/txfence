@@ -112,3 +112,23 @@ export type {
   StepPositionSnapshot,
   IntentPositionAnalysis,
 } from './intent/index.js'
+export {
+  createRegistry,
+  defaultRegistry,
+  asset,
+  protocol,
+  maxSpend,
+  getAsset,
+  getProtocol,
+  listAssets,
+  listProtocols,
+  BUILT_IN_ASSETS,
+  BUILT_IN_PROTOCOLS,
+} from './registry/index.js'
+export type {
+  AssetDefinition,
+  ProtocolDefinition,
+  ProtocolContract,
+  ProtocolContractRole,
+  Registry,
+} from './registry/index.js'
