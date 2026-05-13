@@ -4,6 +4,56 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.38.0
+
+Chain-agnostic policy expressions with asset and protocol registry.
+
+- Added `Registry` interface with `asset()`, `protocol()`, `maxSpend()`, `getAsset()`, `getProtocol()`, `listAssets()`, `listProtocols()`, `addAsset()`, `addProtocol()` methods
+- Added `createRegistry(assets?, protocols?)` factory — creates a registry with custom or default data
+- Added `defaultRegistry` singleton — pre-populated with built-in assets and protocols
+- Top-level helper functions delegate to `defaultRegistry`: `asset()`, `protocol()`, `maxSpend()`, `getAsset()`, `getProtocol()`, `listAssets()`, `listProtocols()`
+
+**Built-in assets (21 definitions):**
+- Ethereum: USDC, USDT, DAI, WETH, WBTC, stETH
+- Arbitrum: USDC, USDT, DAI, WETH, WBTC
+- Optimism: USDC, USDT, DAI, WETH
+- Base: USDC, DAI, WETH
+- Cosmos Hub: ATOM
+- Osmosis: OSMO, ATOM (IBC)
+
+**Built-in protocols (14 entries across 7 protocols):**
+- Uniswap V3: Ethereum, Arbitrum, Optimism, Base
+- 1inch V5: Ethereum, Arbitrum, Optimism, Base
+- Aave V3: Ethereum, Arbitrum, Optimism, Base
+- Lido: Ethereum
+- Compound V3: Ethereum, Arbitrum
+- Curve Finance: Ethereum
+
+**Usage:**
+```typescript
+import { protocol, maxSpend } from '@txfence/core'
+
+const policy: Policy = {
+  chains: ['ethereum', 'arbitrum'],
+  maxSpendPerTx: maxSpend(10_000n, 'USDC', 'ethereum'),
+  allowedContracts: [
+    ...protocol('uniswap-v3', ['ethereum', 'arbitrum']),
+    ...protocol('aave-v3', ['ethereum']),
+  ],
+  // ...
+}
+```
+
+- `protocol()` returns `ContractEntry[]` ready to spread into `allowedContracts` — no address hardcoding
+- `maxSpend()` resolves token decimals automatically — no decimals mismatch risk
+- Symbol lookup is case-insensitive
+- `addAsset()` and `addProtocol()` for custom entries — replaces existing entries for same symbol+chain or id+chain
+- `createRegistry([], [])` creates an empty registry for fully custom setups
+- Policy engine unchanged — addresses are resolved at policy build time, not evaluation time
+- 22 new tests covering asset/protocol lookup, custom entries, multi-chain protocol expansion, and real policy integration
+
+---
+
 ## v0.37.0
 
 Simulation forking for multi-step "what-if" analysis.
