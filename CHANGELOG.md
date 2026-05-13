@@ -4,6 +4,35 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.39.0
+
+Replay and backtesting for audit logs.
+
+- Added `replayAuditLog(auditLog, newPolicy, options?)` to `@txfence/core`
+- Feeds historical audit log entries through a new policy and classifies what changed
+- `ReplayDirection` discriminated union: `newly_allowed`, `newly_rejected`, `rejection_reason_changed`
+- `ReplayEntry` carries `originalEvaluation`, `replayEvaluation`, `changed`, `direction`, and `changedChecks`
+- `ReplayResult.summary` counts total, changed, newlyAllowed, newlyRejected, rejectionReasonChanged, unchanged, skipped
+- `ReplayOptions` supports `from`/`to` timestamp range, `actionKind`, `chain`, `onlyChanged`, `includeSimulation` filters
+- `ReplayableAuditLog` minimal interface — `@txfence/audit`'s `AuditLog` satisfies it structurally; no circular dependency
+- `changedChecks` reuses `ChangedCheck` from the diff tool — same classification logic applied to historical data
+- 10 new tests covering empty logs, all three directions, filter passthrough, onlyChanged, mixed summary accuracy, and timestamp bounds
+
+**CLI (@txfence/cli)**
+- Added `txfence replay` command
+- `--audit-log <path>` — path to the JSONL audit log file
+- `--config <path>` — path to the proposed policy config to test against
+- `--from` / `--to` — timestamp range filters (ms since epoch)
+- `--kind`, `--chain` — action filters
+- `--only-changed` — suppress unchanged entries
+- `--json` — machine-readable output
+- Exits 1 if any entries are newly rejected — CI-friendly policy regression gate
+
+**MCP (@txfence/mcp)**
+- Added `txfence_replay_audit_log` tool
+- Returns compact JSON with summary and changed entries only
+- Each changed entry includes direction, action kind/chain, original and replay rejection reasons
+
 ## v0.38.0
 
 Chain-agnostic policy expressions with asset and protocol registry.
