@@ -9,8 +9,8 @@ import {
   formatExecutionFailureReason,
   bigintReplacer,
 } from '@txfence/core'
-import type { Intent, IntentStep } from '@txfence/core'
-import { executeEvmAction } from '@txfence/evm'
+import type { Intent, IntentStep, ForkSimulationConfig } from '@txfence/core'
+import { executeEvmAction, simulateIntentOnFork } from '@txfence/evm'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -216,6 +216,115 @@ submitCmd.action(async (opts: Record<string, unknown>) => {
   }
 })
 
+const forkSimulateCmd = new Command('fork-simulate')
+  .description('Simulate a multi-step intent on a forked chain state — shows final position without executing')
+  .requiredOption('--config <path>', 'path to txfence config')
+  .requiredOption('--intent <path>', 'path to intent JSON file')
+  .requiredOption('--from <address>', 'agent address for all simulated transactions')
+  .requiredOption('--chain <chain>', 'chain to fork (e.g. ethereum, base, arbitrum)')
+  .option('--block <number>', 'block number to fork at (default: latest)')
+  .option('--json', 'output results as JSON')
+
+forkSimulateCmd.action(async (opts) => {
+  try {
+    const config = await loadConfig(resolve(opts.config))
+    const intentRaw = JSON.parse(readFileSync(resolve(opts.intent), 'utf-8'))
+    const intent = reviveIntent(intentRaw)
+
+    const tenderlyAccessKey = process.env.TENDERLY_ACCESS_KEY
+    const tenderlyAccountSlug = process.env.TENDERLY_ACCOUNT_SLUG
+    const tenderlyProjectSlug = process.env.TENDERLY_PROJECT_SLUG
+
+    if (!tenderlyAccessKey || !tenderlyAccountSlug || !tenderlyProjectSlug) {
+      console.error(
+        'Fork simulation requires Tenderly credentials.\n' +
+        'Set these environment variables:\n' +
+        '  TENDERLY_ACCESS_KEY\n' +
+        '  TENDERLY_ACCOUNT_SLUG\n' +
+        '  TENDERLY_PROJECT_SLUG'
+      )
+      process.exit(1)
+    }
+
+    const forkConfig: ForkSimulationConfig = {
+      provider: 'tenderly',
+      tenderlyConfig: {
+        accessKey: tenderlyAccessKey,
+        accountSlug: tenderlyAccountSlug,
+        projectSlug: tenderlyProjectSlug,
+      },
+      fromAddress: opts.from,
+      ...(opts.block !== undefined ? { blockNumber: parseInt(opts.block, 10) } : {}),
+    }
+
+    const rpcUrl = config.rpcUrls?.[opts.chain as import('@txfence/core').ChainId] ?? process.env.ETHEREUM_RPC_URL
+    if (!rpcUrl) {
+      console.error(`No RPC URL configured for chain ${opts.chain}`)
+      process.exit(1)
+    }
+
+    console.log(`\n=== Fork Simulation ===\n`)
+    console.log(`Intent:  ${intent.id}${intent.label ? ` (${intent.label})` : ''}`)
+    console.log(`Chain:   ${opts.chain}`)
+    console.log(`From:    ${opts.from}`)
+    console.log(`Steps:   ${intent.steps.length}`)
+    console.log(`\nCreating fork and simulating...`)
+
+    const result = await simulateIntentOnFork(
+      intent,
+      forkConfig,
+      opts.chain as import('@txfence/core').ChainId,
+      rpcUrl,
+    )
+
+    if (opts.json) {
+      console.log(JSON.stringify(result, bigintReplacer, 2))
+      process.exit(result.wouldAllSucceed ? 0 : 1)
+      return
+    }
+
+    console.log(`\n=== Results ===\n`)
+    console.log(`Forked at block: ${result.forkedAtBlock}`)
+    console.log(`Would all succeed: ${result.wouldAllSucceed ? 'YES' : 'NO'}`)
+    if (result.failingStepId !== undefined) {
+      console.log(`Failing step:      ${result.failingStepId}`)
+    }
+    console.log('')
+
+    console.log('Step results:')
+    for (const step of result.steps) {
+      const status = step.wouldRevert ? '✗ REVERT' : '✓ SUCCESS'
+      console.log(`  ${status}  ${step.stepId}`)
+      if (step.wouldRevert && step.revertReason !== undefined) {
+        console.log(`         Reason: ${step.revertReason}`)
+      }
+      if (step.stateChanges.length > 0) {
+        console.log(`         State changes: ${step.stateChanges.length}`)
+        for (const sc of step.stateChanges) {
+          const sign = sc.delta >= 0n ? '+' : ''
+          console.log(`           ${sc.address.slice(0, 10)}... ${sign}${sc.delta}`)
+        }
+      }
+    }
+
+    if (result.finalPosition.length > 0) {
+      console.log('\nFinal position delta:')
+      for (const pos of result.finalPosition) {
+        const sign = pos.amount >= 0n ? '+' : ''
+        console.log(`  ${pos.token} on ${pos.chain}: ${sign}${pos.amount}`)
+      }
+    } else {
+      console.log('\nFinal position: no changes detected')
+    }
+
+    console.log('')
+    process.exit(result.wouldAllSucceed ? 0 : 1)
+  } catch (err) {
+    console.error((err as Error).message)
+    process.exit(1)
+  }
+})
+
 // ── export ────────────────────────────────────────────────────────────────────
 
 export function makeIntentCommand(): Command {
@@ -224,5 +333,6 @@ export function makeIntentCommand(): Command {
 
   cmd.addCommand(validateCmd)
   cmd.addCommand(submitCmd)
+  cmd.addCommand(forkSimulateCmd)
   return cmd
 }

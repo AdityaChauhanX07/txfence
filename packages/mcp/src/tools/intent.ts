@@ -61,7 +61,7 @@ const intentPolicySchema = z.object({
   allowedChains: z.array(z.string()).optional(),
 })
 
-const intentSchema = z.object({
+export const intentSchema = z.object({
   id: z.string(),
   label: z.string().optional(),
   steps: z.array(intentStepSchema),
@@ -72,7 +72,7 @@ function reviveTokenAmount(ta: { token: string; amount: string; decimals: number
   return { token: ta.token, amount: BigInt(ta.amount), decimals: ta.decimals }
 }
 
-function buildIntentFromSchema(raw: z.infer<typeof intentSchema>): Intent {
+export function buildIntentFromSchema(raw: z.infer<typeof intentSchema>): Intent {
   const steps: IntentStep[] = raw.steps.map(step => {
     const chain = step.action.chain as ChainId
     const action = (() => {
