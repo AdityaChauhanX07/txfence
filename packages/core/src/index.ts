@@ -1,4 +1,5 @@
 export type { ChainId, TokenAmount, ContractEntry, Policy, CapLockMode } from './types/policy.js'
+export type { MevProtectionMode, MevProtectionConfig, FlashbotsConfig, MevBlockerConfig } from './types/mev.js'
 export type { Action, SwapAction, TransferAction, ContractCallAction, BoundAction, SolanaAccountMeta } from './types/action.js'
 export type { SimulationResult, SimulationCoverageLevel, SimulationCaveat, SimulationProvider, SimulateOptions, TenderlyTrace } from './types/simulation.js'
 export type { ExecutionResult, SuccessReceipt, PolicyEvaluation, PolicyRejectionReason, ExecutionFailureReason } from './types/receipt.js'

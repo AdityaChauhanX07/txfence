@@ -1,4 +1,5 @@
 import type { CapConfig } from '../caps/provider.js'
+import type { MevProtectionMode } from './mev.js'
 
 export type ChainId =
   | 'ethereum'
@@ -36,4 +37,9 @@ export type Policy = {
   capLockMode: CapLockMode
   capLocks?: CapConfig[]
   simulationStalenessMs?: number
+  mevProtection?: MevProtectionMode
+  // Per-transaction MEV protection. Default 'none'.
+  // 'flashbots' routes through Flashbots Protect RPC.
+  // 'mev-blocker' routes through MEV Blocker (CoW Protocol).
+  // Only applies to EVM chains — ignored by Solana and Cosmos adapters.
 }
