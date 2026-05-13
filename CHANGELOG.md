@@ -4,6 +4,52 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.37.0
+
+Simulation forking for multi-step "what-if" analysis.
+
+**Fork simulation types (@txfence/core)**
+- Added `ForkSimulationConfig` with `provider`, `tenderlyConfig`, `blockNumber`, and `fromAddress` fields
+- Added `TenderlyForkConfig` type in core — avoids circular dependency with @txfence/evm
+- Added `StepForkSimulationResult` — per-step simulation result with `stateChanges`, `cumulativePosition`, `wouldRevert`, `revertReason`
+- Added `ForkSimulationResult` — full result with `forkId`, `forkedAtBlock`, `steps`, `finalPosition`, `wouldAllSucceed`, `failingStepId`, `simulatedAt`
+- Added `StateChange` type — `address`, `token?`, `balanceBefore`, `balanceAfter`, `delta` (all bigint)
+
+**Tenderly fork client (@txfence/evm)**
+- Added `createFork(config, chainId, blockNumber?)` — POSTs to Tenderly Fork API, returns `forkId` and `forkedAtBlock`
+- Added `simulateOnFork(config, forkId, txParams, chainId, blockNumber)` — simulates a transaction on the fork, applies state changes
+- Added `deleteFork(config, forkId)` — DELETEs the fork; 404 is silently accepted; non-throwing
+- Added `buildForkTransactionParams(action, fromAddress)` — converts any Action to Tenderly transaction params
+- Added `simulateIntentOnFork(intent, config, chainId, rpcUrl)` — orchestrates sequential fork simulation
+  - Walks the execution plan in topological order
+  - Simulates each step on the fork, building cumulative position deltas
+  - Identifies the first failing step if any step would revert
+  - Deletes the fork in a `finally` block — guaranteed cleanup even on error
+  - Returns `ForkSimulationResult` with full per-step detail and final position
+- 11 fork client tests + 8 fork simulation tests (26 total EVM tests)
+
+**CLI (@txfence/cli)**
+- Added `txfence intent fork-simulate` subcommand
+- Requires `TENDERLY_ACCESS_KEY`, `TENDERLY_ACCOUNT_SLUG`, `TENDERLY_PROJECT_SLUG` environment variables
+- Reads intent from JSON file via `--intent`, agent address via `--from`, chain via `--chain`
+- Optional `--block` to fork at a specific block number
+- Human-readable output: per-step pass/fail with state change deltas and final position delta
+- `--json` flag for machine-readable output
+- Exits 0 if all steps would succeed, 1 if any would fail
+
+**MCP (@txfence/mcp)**
+- Added `txfence_fork_simulate_intent` tool
+- Exported `intentSchema` and `buildIntentFromSchema` from intent tools for reuse
+- Returns structured JSON with per-step results, state changes (bigints as strings), and final position
+- Returns clear error message if Tenderly credentials are not configured
+
+**Known limitations:**
+- EVM only — Solana fork simulation via account overrides is planned for v2
+- Token symbol in state changes is `'native'` for ETH balance diffs — full token symbol resolution requires token contract inspection
+- Fork simulation costs Tenderly credits — use a dedicated Tenderly project for simulation workloads
+
+---
+
 ## v0.36.0
 
 Intent-level execution — Pass 1, 2, and 3 complete.
