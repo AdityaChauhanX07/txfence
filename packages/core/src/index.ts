@@ -132,3 +132,11 @@ export type {
   ProtocolContractRole,
   Registry,
 } from './registry/index.js'
+export { replayAuditLog } from './replay/index.js'
+export type {
+  ReplayEntry,
+  ReplayResult,
+  ReplayOptions,
+  ReplayDirection,
+  ReplayableAuditLog,
+} from './replay/index.js'
