@@ -4,6 +4,34 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.40.0
+
+MEV protection integration for EVM agents.
+
+**Policy field (@txfence/core)**
+- Added `mevProtection?: MevProtectionMode` to `Policy` — per-transaction MEV protection level
+- `MevProtectionMode`: `'flashbots'` | `'mev-blocker'` | `'none'` (default)
+- Added `MevProtectionConfig`, `FlashbotsConfig`, `MevBlockerConfig` types
+- MEV protection is a per-transaction policy decision — swaps can use Flashbots while transfers use none
+- Only applies to EVM chains — Solana and Cosmos adapters ignore this field
+
+**Broadcast routing (@txfence/evm)**
+- Added `getMevProtectedRpcUrl(mode, config?, fallbackRpcUrl?)` — resolves the broadcast endpoint based on protection mode
+- Added `broadcastWithMevProtection(signedTx, mode, config?, fallbackRpcUrl?)` — sends `eth_sendRawTransaction` to the protected endpoint
+- Flashbots Protect default endpoint: `https://rpc.flashbots.net`
+- MEV Blocker default endpoint: `https://rpc.mevblocker.io`
+- Custom endpoints configurable via `MevProtectionConfig`
+- `broadcastAndConfirm` accepts optional `mevProtection` and `mevConfig` parameters — routes to protected endpoint when set
+- `executeEvmAction` threads `mevProtection` and `mevConfig` through to `broadcastAndConfirm`
+- Flashbots auth signing (`X-Flashbots-Signature`) documented as planned for v2 — unsigned requests are still protected, just without reputation scoring
+- 12 new tests covering URL resolution for all modes, custom endpoints, successful broadcast, error handling, and body construction
+
+**Known limitations:**
+- Flashbots auth signing requires ECDSA secp256k1 — deferred to v2; unsigned requests still receive MEV protection
+- MEV protection only available for EVM chains
+- Both endpoints require internet access — not suitable for air-gapped environments
+- Flashbots Protect may have higher latency than standard RPC submission
+
 ## v0.39.0
 
 Replay and backtesting for audit logs.
