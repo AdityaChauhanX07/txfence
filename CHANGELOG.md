@@ -4,6 +4,52 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.44.0
+
+Adversarial simulation engine — chaos engineering for crypto policy.
+
+- Added `stressTest(policy, config?)` to `@txfence/verify` — runs adversarial scenarios against a policy and produces a risk report
+- `DEFAULT_VECTORS` — the six attack vectors tested by default
+
+**Six attack vectors:**
+
+`rapid_fire` — one agent submits N transactions in rapid succession, each just under the per-tx cap. Tests timing races against the cap lock. 3 scenarios: simultaneous burst, jittered burst, multi-agent burst.
+
+`coordinated_drain` — multiple agents coordinate to drain a shared cap simultaneously. Tests whether two-phase cap locking prevents collective over-spend. 3 scenarios: simultaneous, 1ms-staggered, two-wave.
+
+`rpc_failure` — injects RPC failures at simulation and execution stages. Tests that the pipeline returns well-defined results rather than throwing unhandled exceptions. 3 scenarios: simulation-stage failure, execution-stage failure, intermittent failure.
+
+`stale_simulation` — injects simulation staleness beyond the configured threshold. Tests the simulationStalenessMs check. 2 scenarios: 2x threshold, threshold+1.
+
+`cap_boundary` — off-by-one tests around maxSpendPerTx. Tests exact cap, cap+1n, cap-1n, and zero amount. 4 scenarios.
+
+`approval_flood` — multiple agents simultaneously submit transactions above the approval threshold. Tests approval timeout handling. 2 scenarios.
+
+**RiskReport includes:**
+- `survivalRate` — fraction of scenarios that produced well-defined results
+- `byVector` — per-vector stats with total, failed, failureRate
+- `bySeverity` — failure counts by critical/high/medium/low
+- `failedScenarios` — sorted by severity with description and details
+- `recommendation` — actionable guidance based on failure patterns (circuit breaker, rate limiting, cap tuning, etc.)
+
+**ScenarioOutcome:**
+- `survived` — pipeline returned a well-defined ExecutionResult
+- `system_error` — unhandled exception escaped runPipeline
+- `timeout` — scenario exceeded timeoutMs
+- `false_acceptance` — reserved for future detection
+- `false_rejection` — reserved for future detection
+
+**CLI (@txfence/cli)**
+- Added `txfence stress-test` command
+- `--agents`, `--transactions`, `--jitter`, `--timeout` to configure bounds
+- `--vectors` to select specific attack vectors (comma-separated)
+- `--only-failures` to suppress passing scenarios
+- `--json` for machine-readable output
+- Exits 0 when all scenarios survive, 1 when any fail — CI-friendly
+- Human-readable output shows survival rate, per-vector breakdown, severity counts, and recommendation
+
+- 18 total tests in `@txfence/verify` (11 property verification + 7 stress test)
+
 ## v0.41.0
 
 Formal policy verification with bounded model checking and counterexample generation.
