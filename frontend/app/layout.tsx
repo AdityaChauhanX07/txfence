@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "txfence — The Policy Layer for Autonomous Agents",
+  title: "txfence",
   description:
     "txfence is the policy enforcement layer for AI agents. Define rules, enforce limits, and audit every action your agents take — before they hit production.",
   keywords: [
