@@ -4,6 +4,42 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.41.0
+
+Formal policy verification with bounded model checking and counterexample generation.
+
+- Added `@txfence/verify` package — bounded model checking for policy invariants
+- `verify(property)` — synchronous dispatch to the appropriate checker
+- `verifyAll(properties[])` — async parallel verification of multiple properties
+
+**Three properties:**
+
+`absolute_cap_reachability` — Can N agents × M transactions reach or exceed the absolute cap?
+- Arithmetic check: agentCount × transactionsPerAgent × maxSpendPerTx vs capAmount
+- Generates minimal counterexample: only the transactions needed to exceed the cap
+- Example: 10 agents × 10 transactions × 1,000 USDC = 100,000 USDC > 50,000 cap → violated
+
+`rolling_window_saturation` — Can N agents collectively exceed a rolling window cap through adversarial scheduling?
+- Four adversarial scenarios: simultaneous burst, staggered burst, double burst, worst-case single agent
+- Sliding window sum to detect violations
+- Counterexample shows exact timestamps and amounts that cause the violation
+
+`policy_containment` — Is every action allowed by innerPolicy also allowed by outerPolicy?
+- Uses `createTestActions` + `diffPolicies` from `@txfence/core`
+- Flags `newly_rejected` actions as containment violations
+- Counterexample is the concrete action that inner allows but outer rejects
+
+**VerificationResult discriminated union:**
+- `{ status: 'holds', checkedBound, scenariosChecked, durationMs }` — property holds within the bound
+- `{ status: 'violated', counterExample, durationMs }` — concrete violation found
+- `{ status: 'unknown', reason, durationMs }` — reserved for future use
+
+**CounterExample** includes description, transactions (with agentId, action, timestamp, amount), violatedAt index, violatedAmount, capLimit, and checkedBound
+
+**Bounded verification** — always document your bounds. A property that holds for N=10, M=10 may still be violated for larger values. Z3 SMT backend for complete proofs is planned.
+
+- 11 tests covering all three properties, both holds and violated outcomes, counterexample structure, and dispatch correctness
+
 ## v0.40.0
 
 MEV protection integration for EVM agents.
