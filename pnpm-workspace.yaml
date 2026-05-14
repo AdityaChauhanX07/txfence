@@ -6,6 +6,7 @@ packages:
   - "packages/react"
   - "packages/monitor"
   - "packages/verify"
+  - "packages/provenance"
   - "examples"
   - "examples/treasury-agent"
   - "packages/scripts"
