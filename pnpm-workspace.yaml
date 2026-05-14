@@ -5,6 +5,7 @@ packages:
   - "packages/cli"
   - "packages/react"
   - "packages/monitor"
+  - "packages/verify"
   - "examples"
   - "examples/treasury-agent"
   - "packages/scripts"
