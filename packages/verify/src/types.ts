@@ -97,3 +97,74 @@ export type VerificationProperty =
 // Re-export upstream types used in this module so external consumers can
 // reach them without importing @txfence/core directly.
 export type { Policy, ChainId, TokenAmount, Action }
+
+export type AttackVector =
+  | 'rapid_fire'
+  | 'coordinated_drain'
+  | 'stale_simulation'
+  | 'rpc_failure'
+  | 'approval_flood'
+  | 'cap_boundary'
+  | 'chain_reorg'
+
+export type ScenarioOutcome =
+  | 'survived'
+  | 'false_rejection'
+  | 'false_acceptance'
+  | 'system_error'
+  | 'timeout'
+
+export type ScenarioSeverity = 'low' | 'medium' | 'high' | 'critical'
+
+export type ScenarioResult = {
+  scenarioId: string
+  vector: AttackVector
+  description: string
+  outcome: ScenarioOutcome
+  durationMs: number
+  details: string
+  severity: ScenarioSeverity
+}
+
+export type VectorStats = {
+  total: number
+  failed: number
+  failureRate: number
+}
+
+export type RiskReport = {
+  policy: Policy
+  totalScenarios: number
+  survived: number
+  failed: number
+  survivalRate: number
+  failedScenarios: ScenarioResult[]
+  byVector: Partial<Record<AttackVector, VectorStats>>
+  bySeverity: Partial<Record<ScenarioSeverity, number>>
+  generatedAt: number
+  durationMs: number
+  recommendation: string
+}
+
+export type StressTestConfig = {
+  agentCount?: number
+  transactionsPerScenario?: number
+  timingJitterMs?: number
+  rpcFailureRate?: number
+  vectors?: AttackVector[]
+  seed?: number
+  timeoutMs?: number
+}
+
+// A single adversarial scenario ready to execute
+export type Scenario = {
+  id: string
+  vector: AttackVector
+  description: string
+  transactions: TransactionScenario[]
+  injectRpcFailure: boolean
+  rpcFailureStage?: 'simulation' | 'execution'
+  simulationStalenessMs?: number
+  expectedOutcome: ScenarioOutcome
+  severity: ScenarioSeverity
+}
