@@ -1,6 +1,6 @@
 import type { Action, BoundAction } from '../types/action.js'
 import type { Policy, ChainId } from '../types/policy.js'
-import type { ExecutionResult, SuccessReceipt, PolicyEvaluation, PolicyRejectionReason } from '../types/receipt.js'
+import type { ExecutionResult, SuccessReceipt, PolicyEvaluation, PolicyRejectionReason, ExecutionFailureReason } from '../types/receipt.js'
 import { formatExecutionFailureReason } from '../types/receipt.js'
 import type { SimulationResult } from '../types/simulation.js'
 import type { CapLockProvider } from '../caps/provider.js'
@@ -14,6 +14,7 @@ import { evaluate, evaluateNode } from '../engine/index.js'
 import type { PolicyNode } from '../engine/composite.js'
 import { checkCapLock, checkMetadata } from '../engine/checks.js'
 import { noopTelemetry } from '../telemetry/noop.js'
+import { getPolicyVersionId } from '../versioning/hash.js'
 import type { AdapterMap } from './adapter.js'
 
 function getSpendAmount(action: Action): bigint {
@@ -46,6 +47,69 @@ type PipelineAuditLog = {
     intentId?: string
     intentStepId?: string
   }) => Promise<void>
+}
+
+// Mirrors ProvenanceOutcome from @txfence/provenance without creating a circular dep.
+// @txfence/provenance defines the same shape and is assignable here.
+type PipelineProvenanceOutcome =
+  | { status: 'success'; txHash: string; confirmedAtBlock: number; gasUsed: string }
+  | { status: 'policy_rejected'; reason: PolicyRejectionReason }
+  | { status: 'simulation_failed' }
+  | { status: 'approval_timeout' }
+  | { status: 'execution_failed'; reason: ExecutionFailureReason }
+  | { status: 'simulation_stale'; stalenessMs: number }
+
+// Mirrors ProvenanceRecordInput from @txfence/provenance. Defining inline
+// preserves the package layering — core never imports from provenance.
+type PipelineProvenanceChain = {
+  append: (record: {
+    agentId: string
+    policyVersionId: string
+    action: Action
+    simulationResult?: SimulationResult
+    approvalDecision?: 'approved' | 'rejected' | 'not_required'
+    approver?: string
+    submittedAtBlock?: number
+    submittedAtBlockHash?: string
+    receipt?: SuccessReceipt
+    outcome: PipelineProvenanceOutcome
+    timestamp: number
+  }) => Promise<unknown>
+}
+
+function buildProvenanceOutcome(result: ExecutionResult): PipelineProvenanceOutcome | undefined {
+  switch (result.status) {
+    case 'success':
+      return {
+        status: 'success',
+        txHash: result.receipt.txHash,
+        confirmedAtBlock: result.receipt.confirmedAtBlock,
+        gasUsed: result.receipt.gasUsed.toString(),
+      }
+    case 'policy_rejected':
+      if (result.evaluation.rejectionReason === undefined) return undefined
+      return { status: 'policy_rejected', reason: result.evaluation.rejectionReason }
+    case 'simulation_failed':
+      return { status: 'simulation_failed' }
+    case 'simulation_stale':
+      return { status: 'simulation_stale', stalenessMs: result.stalenessMs }
+    case 'approval_timeout':
+      return { status: 'approval_timeout' }
+    case 'execution_failed':
+      return { status: 'execution_failed', reason: result.reason }
+  }
+}
+
+async function recordProvenance(
+  chain: PipelineProvenanceChain | undefined,
+  record: Parameters<PipelineProvenanceChain['append']>[0],
+): Promise<void> {
+  if (chain === undefined) return
+  try {
+    await chain.append(record)
+  } catch (err) {
+    console.error('[txfence] provenance recording failed:', err)
+  }
 }
 
 function buildAuditOutcome(result: ExecutionResult): PipelineAuditOutcome {
@@ -91,6 +155,7 @@ export async function runPipeline(
   policyNode?: PolicyNode,
   notificationProvider?: NotificationProvider,
   intentContext?: { intentId: string; stepId: string },
+  provenanceChain?: PipelineProvenanceChain,
 ): Promise<ExecutionResult> {
   const telemetry = telemetryProvider ?? noopTelemetry
   const pipelineSpan = telemetry.startSpan('txfence.pipeline', {
@@ -448,6 +513,20 @@ export async function runPipeline(
           intentStepId: intentContext.stepId,
         } : {}),
       })
+    }
+
+    if (provenanceChain !== undefined) {
+      const provenanceOutcome = buildProvenanceOutcome(result)
+      if (provenanceOutcome !== undefined) {
+        await recordProvenance(provenanceChain, {
+          agentId: 'unknown',
+          policyVersionId: getPolicyVersionId(policy),
+          action,
+          ...(auditSimulation !== undefined ? { simulationResult: auditSimulation } : {}),
+          timestamp: Date.now(),
+          outcome: provenanceOutcome,
+        })
+      }
     }
 
     return result

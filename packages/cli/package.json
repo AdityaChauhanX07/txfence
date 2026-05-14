@@ -27,6 +27,7 @@
     "@txfence/core": "workspace:*",
     "@txfence/evm": "workspace:*",
     "@txfence/mcp": "workspace:*",
+    "@txfence/provenance": "workspace:*",
     "@txfence/verify": "workspace:*",
     "commander": "^12.0.0",
     "tsx": "^4.0.0",

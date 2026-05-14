@@ -13,6 +13,7 @@ import { makeIntentCommand } from './commands/intent.js'
 import { makeReplayCommand } from './commands/replay.js'
 import { makeVerifyCommand } from './commands/verify.js'
 import { makeStressTestCommand } from './commands/stress-test.js'
+import { makeProvenanceCommand } from './commands/provenance.js'
 
 const program = new Command()
   .name('txfence')
@@ -31,5 +32,6 @@ program.addCommand(makeIntentCommand())
 program.addCommand(makeReplayCommand())
 program.addCommand(makeVerifyCommand())
 program.addCommand(makeStressTestCommand())
+program.addCommand(makeProvenanceCommand())
 
 program.parse(process.argv)

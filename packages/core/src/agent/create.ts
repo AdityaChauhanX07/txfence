@@ -19,6 +19,7 @@ import type { Intent, IntentExecutionResult } from '../intent/types.js'
 import type { IntentExecutionOptions } from '../intent/execute.js'
 
 type AuditLogLike = Parameters<typeof runPipeline>[9]
+type ProvenanceChainLike = Parameters<typeof runPipeline>[14]
 
 export function createAgent(
   config: AgentConfig,
@@ -40,6 +41,7 @@ export function createAgent(
   capLockConfigs?: CapConfig[],
   policyNode?: PolicyNode,
   notificationProvider?: NotificationProvider,
+  provenanceChain?: ProvenanceChainLike,
 ): Agent {
   let inFlight = 0
   let completed = 0
@@ -107,6 +109,8 @@ export function createAgent(
         telemetryProvider,
         policyNode,
         notificationProvider,
+        undefined,
+        provenanceChain,
       )
       completed++
       return result

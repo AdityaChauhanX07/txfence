@@ -83,6 +83,9 @@ importers:
       '@txfence/mcp':
         specifier: workspace:*
         version: link:../mcp
+      '@txfence/provenance':
+        specifier: workspace:*
+        version: link:../provenance
       '@txfence/verify':
         specifier: workspace:*
         version: link:../verify
