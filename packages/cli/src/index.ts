@@ -11,6 +11,7 @@ import { makeDryRunCommand } from './commands/dry-run.js'
 import { makePolicySnapshotCommand } from './commands/policy-snapshot.js'
 import { makeIntentCommand } from './commands/intent.js'
 import { makeReplayCommand } from './commands/replay.js'
+import { makeVerifyCommand } from './commands/verify.js'
 
 const program = new Command()
   .name('txfence')
@@ -27,5 +28,6 @@ program.addCommand(makeDryRunCommand())
 program.addCommand(makePolicySnapshotCommand())
 program.addCommand(makeIntentCommand())
 program.addCommand(makeReplayCommand())
+program.addCommand(makeVerifyCommand())
 
 program.parse(process.argv)
