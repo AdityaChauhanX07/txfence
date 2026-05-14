@@ -40,6 +40,17 @@ Formal policy verification with bounded model checking and counterexample genera
 
 - 11 tests covering all three properties, both holds and violated outcomes, counterexample structure, and dispatch correctness
 
+**CLI (@txfence/cli)**
+- Added `txfence verify rolling-window` — checks rolling window cap saturation
+- Added `txfence verify absolute-cap` — checks absolute cap reachability
+- Added `txfence verify policy-contains` — checks policy containment
+- All three commands exit 0 when the property holds, 1 when violated — CI-friendly
+- `--json` flag for machine-readable output
+- Human-readable output shows counterexample with first 5 transactions and "N more" tail
+- `@txfence/verify` added as dependency to `@txfence/cli`
+
+---
+
 ## v0.40.0
 
 MEV protection integration for EVM agents.
