@@ -1,5 +1,6 @@
 import type { CapConfig } from '../caps/provider.js'
 import type { MevProtectionMode } from './mev.js'
+import type { TemporalRule } from '../temporal/types.js'
 
 export type ChainId =
   | 'ethereum'
@@ -42,4 +43,8 @@ export type Policy = {
   // 'flashbots' routes through Flashbots Protect RPC.
   // 'mev-blocker' routes through MEV Blocker (CoW Protocol).
   // Only applies to EVM chains — ignored by Solana and Cosmos adapters.
+  temporalRules?: TemporalRule[]
+  // Stateful rules evaluated against the sliding window of pipeline events.
+  // Evaluated after static policy checks, before simulation.
+  // Requires an EventStore to be passed to runPipeline or createAgent.
 }
