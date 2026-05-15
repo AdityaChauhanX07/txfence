@@ -141,3 +141,17 @@ export type {
   ReplayDirection,
   ReplayableAuditLog,
 } from './replay/index.js'
+export {
+  createMemoryEventStore,
+  evaluateTemporalRules,
+} from './temporal/index.js'
+export type {
+  PipelineEvent,
+  PipelineEventOutcome,
+  EventFilter,
+  EventStore,
+  TemporalPredicate,
+  TemporalRule,
+  TemporalConsequence,
+  TemporalEvaluationResult,
+} from './temporal/index.js'

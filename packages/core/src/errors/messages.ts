@@ -49,6 +49,9 @@ export function getPolicyRejectionMessage(reason: PolicyRejectionReason, action:
 
     case 'chain_id_mismatch':
       return `chain ID mismatch — the connected provider is on a different chain than expected`
+
+    case 'temporal_rule_triggered':
+      return `temporal rule triggered — action rejected based on agent behavior over time`
   }
 }
 

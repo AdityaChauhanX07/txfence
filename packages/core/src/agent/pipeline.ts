@@ -15,6 +15,8 @@ import type { PolicyNode } from '../engine/composite.js'
 import { checkCapLock, checkMetadata } from '../engine/checks.js'
 import { noopTelemetry } from '../telemetry/noop.js'
 import { getPolicyVersionId } from '../versioning/hash.js'
+import type { EventStore, PipelineEventOutcome } from '../temporal/types.js'
+import { evaluateTemporalRules } from '../temporal/evaluate.js'
 import type { AdapterMap } from './adapter.js'
 
 function getSpendAmount(action: Action): bigint {
@@ -112,6 +114,56 @@ async function recordProvenance(
   }
 }
 
+function recordPipelineEvent(
+  store: EventStore,
+  params: {
+    agentId: string
+    chain: ChainId
+    action: Action
+    outcome: PipelineEventOutcome
+    spendAmount?: bigint
+  },
+): void {
+  try {
+    store.record({
+      id: randomUUID(),
+      timestamp: Date.now(),
+      agentId: params.agentId,
+      chain: params.chain,
+      action: params.action,
+      outcome: params.outcome,
+      ...(params.spendAmount !== undefined ? { spendAmount: params.spendAmount } : {}),
+    })
+  } catch {
+    // Event recording must never crash the pipeline
+  }
+}
+
+function buildPipelineEventOutcome(result: ExecutionResult): PipelineEventOutcome {
+  switch (result.status) {
+    case 'success':
+      return { status: 'success', txHash: result.receipt.txHash }
+    case 'policy_rejected':
+      if (result.evaluation.rejectionReason === 'temporal_rule_triggered') {
+        return { status: 'temporal_rejected' }
+      }
+      return {
+        status: 'policy_rejected',
+        ...(result.evaluation.rejectionReason !== undefined
+          ? { rejectionReason: result.evaluation.rejectionReason }
+          : {}),
+      }
+    case 'simulation_failed':
+      return { status: 'simulation_failed' }
+    case 'simulation_stale':
+      return { status: 'simulation_stale' }
+    case 'approval_timeout':
+      return { status: 'approval_timeout' }
+    case 'execution_failed':
+      return { status: 'execution_failed' }
+  }
+}
+
 function buildAuditOutcome(result: ExecutionResult): PipelineAuditOutcome {
   switch (result.status) {
     case 'success':
@@ -156,6 +208,8 @@ export async function runPipeline(
   notificationProvider?: NotificationProvider,
   intentContext?: { intentId: string; stepId: string },
   provenanceChain?: PipelineProvenanceChain,
+  eventStore?: EventStore,
+  agentId?: string,
 ): Promise<ExecutionResult> {
   const telemetry = telemetryProvider ?? noopTelemetry
   const pipelineSpan = telemetry.startSpan('txfence.pipeline', {
@@ -205,6 +259,39 @@ export async function runPipeline(
           void notificationProvider?.notify({ kind: 'policy_rejected', action, reason: evaluation.rejectionReason, evaluation })
         }
         return { status: 'policy_rejected', action, evaluation }
+      }
+
+      // Step 2b — temporal rule evaluation
+      if (
+        policy.temporalRules !== undefined &&
+        policy.temporalRules.length > 0 &&
+        eventStore !== undefined
+      ) {
+        const temporalResult = evaluateTemporalRules(
+          policy.temporalRules,
+          eventStore,
+          action,
+          agentId ?? '',
+        )
+        if (temporalResult.triggered && temporalResult.consequence?.kind === 'reject') {
+          const temporalEval: PolicyEvaluation = {
+            passed: false,
+            checksRun: ['evaluateTemporalRules'],
+            rejectionReason: 'temporal_rule_triggered',
+          }
+          auditEvaluation = temporalEval
+          pipelineSpan.setAttribute('txfence.status', 'policy_rejected')
+          pipelineSpan.setAttribute('txfence.rejection_reason', 'temporal_rule_triggered')
+          pipelineSpan.setStatus('error', 'temporal_rule_triggered')
+          void notificationProvider?.notify({
+            kind: 'policy_rejected',
+            action,
+            reason: 'temporal_rule_triggered',
+            evaluation: temporalEval,
+          })
+          return { status: 'policy_rejected', action, evaluation: temporalEval }
+        }
+        // 'require_approval' and 'flag_for_review' consequences: pass through for v1.
       }
 
       // Step 2.5 — metadata verification
@@ -527,6 +614,19 @@ export async function runPipeline(
           outcome: provenanceOutcome,
         })
       }
+    }
+
+    if (eventStore !== undefined) {
+      const eventOutcome = buildPipelineEventOutcome(result)
+      const recordsSpend =
+        result.status === 'success' || result.status === 'execution_failed'
+      recordPipelineEvent(eventStore, {
+        agentId: agentId ?? '',
+        chain: action.chain,
+        action,
+        outcome: eventOutcome,
+        ...(recordsSpend ? { spendAmount: getSpendAmount(action) } : {}),
+      })
     }
 
     return result

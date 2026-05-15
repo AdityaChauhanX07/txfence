@@ -10,6 +10,7 @@ import type { ReceiptStore } from '../storage/store.js'
 import type { ApprovalProvider } from '../approval/types.js'
 import type { TelemetryProvider } from '../telemetry/types.js'
 import type { NotificationProvider } from '../notifications/types.js'
+import type { EventStore } from '../temporal/types.js'
 import { runPipeline } from './pipeline.js'
 import { runDryRun } from './run-dry.js'
 import { executeIntent as runExecuteIntent } from '../intent/execute.js'
@@ -42,6 +43,8 @@ export function createAgent(
   policyNode?: PolicyNode,
   notificationProvider?: NotificationProvider,
   provenanceChain?: ProvenanceChainLike,
+  eventStore?: EventStore,
+  agentId?: string,
 ): Agent {
   let inFlight = 0
   let completed = 0
@@ -111,6 +114,8 @@ export function createAgent(
         notificationProvider,
         undefined,
         provenanceChain,
+        eventStore,
+        agentId,
       )
       completed++
       return result

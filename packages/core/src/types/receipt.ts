@@ -34,6 +34,7 @@ export type PolicyRejectionReason =
   | 'simulation_required_but_failed'
   | 'gas_buffer_insufficient'
   | 'slippage_not_declared'
+  | 'temporal_rule_triggered'
 
 export type PolicyEvaluation = {
   passed: boolean
