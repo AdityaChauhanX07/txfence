@@ -4,6 +4,48 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.45.0
+
+Transaction-level provenance chains with cryptographic integrity.
+
+**New package: @txfence/provenance**
+
+- `ProvenanceRecord` — captures every input to an authorization decision: agentId, policyVersionId, action, simulationResult, approvalDecision, submittedAtBlock, outcome, receipt
+- `ProvenanceChain` interface — `append`, `get`, `list`, `head`, `verify`, `generateProof`, `verifyProof`, `getMerkleRoot`
+- `createMemoryProvenanceChain()` — in-memory implementation for testing
+- `createFileProvenanceChain(path)` — JSONL implementation with write-then-rename atomic appends and bigint revival on read
+- `computeEntryHash(previousHash, record)` — SHA-256 of canonical (sorted-key, bigint-stringified) record content
+- `GENESIS_HASH` — `'0'.repeat(64)` for the first record in a chain
+- `buildMerkleTree(leafHashes)` — standard binary Merkle tree with odd-leaf duplication
+- `getMerkleRoot(leafHashes)` — root hash committing to all entries
+- `generateMerkleProof(leafHashes, targetHash)` — O(log n) proof with sibling hashes and positions
+- `verifyMerkleProof(proof)` — recomputes root from leaf + siblings, returns true if it matches
+- Contract test suite running 14 tests against both implementations
+- 49 total tests: 7 hash + 14 merkle + 14×2 contract
+
+**Tamper evidence:**
+- Hash chaining: each record includes previousHash — modifying any record invalidates all subsequent records
+- Merkle tree: root commits to all records — compact proof that a specific record exists without revealing others
+- Verification detects `hash_mismatch`, `chain_broken`, and `invalid_hash` violations
+
+**Pipeline integration (@txfence/core)**
+- Added optional `provenanceChain?` as 15th parameter to `runPipeline`
+- Structural interface `PipelineProvenanceChain` defined inline — no circular dependency with `@txfence/provenance`
+- `ProvenanceChainLike` type alias on `createAgent` — consumers pass any object satisfying the interface
+- Records all 6 outcome types: `success`, `policy_rejected`, `simulation_failed`, `simulation_stale`, `approval_timeout`, `execution_failed`
+- Provenance recording failure never crashes the pipeline — errors are caught and logged
+
+**CLI (@txfence/cli)**
+- Added `txfence provenance verify --chain <path>` — verifies hash chain integrity, reports violations, exits 1 if invalid
+- Added `txfence provenance proof --chain <path> --hash <entryHash>` — generates Merkle proof for a specific record
+- Both commands support `--json` for machine-readable output
+- Exit 0 when valid/found, 1 when invalid/not found — CI-friendly
+
+**Known limitations:**
+- `agentId` in pipeline-recorded entries is `'unknown'` — pipeline does not have agent identity; callers who need agent identity should record provenance directly via `chain.append()`
+- Chain file must be stored on tamper-evident infrastructure for strict compliance
+- No PostgreSQL or S3 implementation yet — planned
+
 ## v0.44.0
 
 Adversarial simulation engine — chaos engineering for crypto policy.
