@@ -4,6 +4,65 @@ All notable changes to txfence are documented here.
 
 ---
 
+## v0.46.0
+
+Policy temporal logic — stateful behavioral rules over sliding windows of pipeline events.
+
+- Added `TemporalRule` type — combines a `TemporalPredicate` with a `TemporalConsequence` and optional label
+- Added `TemporalConsequence` — `require_approval`, `reject`, or `flag_for_review`
+- Added `temporalRules?: TemporalRule[]` to `Policy` — evaluated after static checks, before simulation
+- Added `EventStore` interface — `record`, `query`, `prune`, `recent`
+- Added `createMemoryEventStore(options?)` — sliding window with configurable `maxWindowMs` (default 24h) and `maxEvents` (default 10k)
+- Added `evaluateTemporalRules(rules, store, action, agentId)` — pure evaluator returning the first triggered rule
+- Added `'temporal_rule_triggered'` to `PolicyRejectionReason` union
+
+**Six predicate kinds:**
+
+`simulation_failure_rate` — triggers when simulation failure count meets threshold in window. Agent-scoped when agentId provided.
+
+`contract_call_frequency` — triggers when a specific contract is called too many times in window.
+
+`success_drought` — triggers when success count falls below threshold in window (agent stalled).
+
+`spend_velocity` — triggers when cumulative spend (historical + current action) exceeds limit in window.
+
+`consecutive_failures` — triggers when the last N pipeline events are all non-success (regardless of time).
+
+`approval_flood` — triggers when approval timeout count meets threshold in window.
+
+**Pipeline integration:**
+- `runPipeline` accepts optional `eventStore?: EventStore` (16th param) and `agentId?: string` (17th param)
+- Temporal rules evaluated between static policy check and simulation
+- `recordPipelineEvent` helper records all 6 outcome types after each pipeline run — swallows errors so event recording never crashes the pipeline
+- `createAgent` threads `eventStore` and `agentId` through to `runPipeline`
+
+**Usage:**
+```typescript
+import { createMemoryEventStore } from '@txfence/core'
+
+const store = createMemoryEventStore()
+const agent = createAgent(config, adapters, rpcUrls, executor, ..., store, 'agent-0x123')
+
+// Policy with temporal rules:
+const policy: Policy = {
+  // ...static fields...
+  temporalRules: [
+    {
+      predicate: { kind: 'simulation_failure_rate', windowMs: 3_600_000, threshold: 3 },
+      consequence: { kind: 'require_approval' },
+      label: 'sim-failure-guard',
+    },
+    {
+      predicate: { kind: 'spend_velocity', windowMs: 1_800_000, maxAmount: 50_000n, token: 'USDC' },
+      consequence: { kind: 'reject' },
+      label: 'velocity-limit',
+    },
+  ],
+}
+```
+
+- 401 predicate/store/evaluation tests + 5 pipeline integration tests = 406 total core tests
+
 ## v0.45.0
 
 Transaction-level provenance chains with cryptographic integrity.
