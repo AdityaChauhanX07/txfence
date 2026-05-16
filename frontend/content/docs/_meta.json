@@ -2,9 +2,10 @@
   "index": "Overview",
   "getting-started": "Getting Started",
   "core-concepts": "Core Concepts",
-  "api-reference": "API Reference",
   "architecture": "Architecture",
   "failure-taxonomy": "Failure Taxonomy",
   "security-model": "Security Model",
-  "runbook": "Runbook"
+  "runbook": "Runbook",
+  "api-reference": "API Reference",
+  "guides": "Guides"
 }

@@ -1,0 +1,80 @@
+---
+title: Policy Versioning
+description: Stable hash-based policy identifiers for audit trails and change management.
+---
+
+# Policy Versioning
+
+Policy versioning gives each policy a stable SHA-256 identifier derived from its content. Two structurally identical policies always produce the same ID, regardless of property definition order. Use policy version IDs in audit trails, CI gates, and change management workflows.
+
+## getPolicyVersionId
+
+```typescript
+import { getPolicyVersionId } from '@txfence/core'
+
+const id = getPolicyVersionId(policy)
+// 64-character SHA-256 hex digest
+// e.g. "a3f2c1d8e9b7..."
+```
+
+Canonical form sorts all keys deeply and serializes `bigint` fields as strings — property order does not affect the ID.
+
+## createPolicyVersion
+
+Wraps a policy with its ID and metadata:
+
+```typescript
+import { createPolicyVersion } from '@txfence/core'
+
+const version = createPolicyVersion(policy, {
+  label:  'treasury-v2',
+  author: 'ops-team',
+})
+
+// version.id        — stable SHA-256 ID
+// version.policy    — the policy object
+// version.createdAt — timestamp
+// version.label     — optional label
+// version.author    — optional author
+```
+
+## PolicyVersionStore
+
+In-memory registry for managing multiple versions:
+
+```typescript
+import { createPolicyVersionStore } from '@txfence/core'
+
+const store = createPolicyVersionStore()
+
+store.register(version)
+
+const retrieved = store.get(version.id)
+const all       = store.list()  // sorted by createdAt descending
+const found     = store.getByPolicy(policy)  // lookup by content
+```
+
+## Audit log integration
+
+Policy version IDs appear in `AuditEntry.policyVersionId` when using `@txfence/audit`. This lets you reconstruct exactly which policy was in effect for any historical decision.
+
+## CLI
+
+```bash
+txfence policy-snapshot --config ./txfence.config.ts --label treasury-v2 --author ops-team
+```
+
+Prints the version ID and a policy summary. `--json` for machine-readable output.
+
+## CI usage
+
+Pin a known-good policy ID in CI and fail if the deployed policy differs:
+
+```bash
+EXPECTED="a3f2c1d8e9b7..."
+ACTUAL=$(txfence policy-snapshot --json | jq -r '.id')
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "Policy has changed unexpectedly"
+  exit 1
+fi
+```

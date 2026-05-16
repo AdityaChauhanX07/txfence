@@ -1,0 +1,93 @@
+---
+title: Notifications
+description: Pluggable notification provider — console, webhook, and composite fan-out for pipeline events.
+---
+
+# Notifications
+
+The notification provider fires structured events at key pipeline moments — rejections, executions, approvals, cap warnings, and monitor alerts. Use it to integrate txfence with Slack, PagerDuty, email, or any webhook endpoint.
+
+## Setup
+
+```typescript
+import { createAgent } from '@txfence/core'
+import {
+  createConsoleNotificationProvider,
+  createWebhookNotificationProvider,
+  createCompositeNotificationProvider,
+} from '@txfence/core'
+
+const notificationProvider = createCompositeNotificationProvider(
+  createConsoleNotificationProvider({ prefix: '[txfence]' }),
+  createWebhookNotificationProvider('https://hooks.slack.com/...'),
+)
+
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  undefined, undefined, undefined, undefined,
+  undefined, undefined, undefined, undefined,
+  undefined, undefined, undefined,
+  notificationProvider  // last optional parameter
+)
+```
+
+## Providers
+
+### Console
+
+```typescript
+createConsoleNotificationProvider({
+  prefix:   '[txfence]',
+  logLevel: 'info',  // 'info' | 'warn' | 'error'
+})
+```
+
+Logs structured one-line messages to the console.
+
+### Webhook
+
+```typescript
+createWebhookNotificationProvider('https://your-endpoint.com/notify', {
+  secret:  process.env.WEBHOOK_SECRET,  // HMAC-SHA256 signing
+  timeout: 5000,
+  headers: { 'X-Source': 'txfence' },
+})
+```
+
+POSTs JSON payload. Optional HMAC-SHA256 signature via `x-txfence-signature` header.
+
+### Composite
+
+```typescript
+createCompositeNotificationProvider(providerA, providerB, providerC)
+```
+
+Fans out to all child providers in parallel. One provider failing does not block others.
+
+## NotificationEvent
+
+Eight event variants:
+
+| Event | Fired when |
+|---|---|
+| `policy_rejected` | Action blocked by policy |
+| `execution_success` | Transaction confirmed on-chain |
+| `execution_failed` | Executor threw or broadcast failed |
+| `approval_requested` | Action exceeded approval threshold |
+| `approval_decision` | Human approved, rejected, or timed out |
+| `cap_warning` | Cap consumption crossed warning threshold |
+| `monitor_unrecorded` | Monitor detected an unrecorded transaction |
+| `monitor_reorg` | Monitor detected a chain reorganization |
+
+## Monitor integration
+
+Pass `notificationProvider` to `MonitorConfig` to receive `monitor_unrecorded` and `monitor_reorg` events:
+
+```typescript
+import { createMonitor } from '@txfence/monitor'
+
+const monitor = createMonitor({
+  ...monitorConfig,
+  notificationProvider,
+})
+```

@@ -1,0 +1,47 @@
+---
+title: "@txfence/redis"
+description: Redis-backed cap lock provider with atomic Lua scripts for multi-agent environments.
+---
+
+# @txfence/redis
+
+Redis-backed `CapLockProvider` for multi-agent environments where multiple agents share a spend cap. Uses atomic Lua scripts for acquire, commit, and release to prevent race conditions.
+
+## Installation
+
+```bash
+npm install @txfence/redis
+```
+
+## createRedisCapLockProvider
+
+```typescript
+import { createRedisCapLockProvider } from '@txfence/redis'
+import Redis from 'ioredis'
+
+const redis = new Redis(process.env.REDIS_URL)
+
+const capLockProvider = createRedisCapLockProvider(redis, [
+  {
+    capId: 'treasury-main',
+    absoluteCap:   { maxAmount: 500_000n, token: 'USDC' },
+    rollingWindow: { windowMs: 3_600_000, maxAmount: 25_000n, token: 'USDC' },
+  }
+])
+```
+
+Pass to `createAgent` as the `capLockProvider` parameter.
+
+## Two-phase locking
+
+`acquire` — reserves budget atomically. If insufficient budget, returns false immediately — no partial locks.
+
+`commit` — confirms the spend after successful execution.
+
+`release` — returns reserved budget on rejection or failure.
+
+Lua scripts ensure acquire/commit/release are atomic even under concurrent multi-agent load.
+
+## When to use
+
+Use `createMemoryCapLockProvider` from `@txfence/core` for single-process deployments. Use `createRedisCapLockProvider` when multiple agent processes share a cap.

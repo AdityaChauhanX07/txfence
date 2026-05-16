@@ -1,0 +1,104 @@
+---
+title: Stress Testing
+description: Adversarial simulation engine — six attack vectors, risk reports, and actionable recommendations.
+---
+
+# Stress Testing
+
+`stressTest` runs adversarial scenarios against your policy and produces a risk report. Six attack vectors probe different failure modes — timing races, coordinated drains, RPC failures, staleness, boundary conditions, and approval floods.
+
+## Installation
+
+```bash
+npm install @txfence/verify
+```
+
+## Basic usage
+
+```typescript
+import { stressTest } from '@txfence/verify'
+
+const report = await stressTest(policy, {
+  agentCount:           10,
+  transactionsPerAgent: 20,
+  jitterMs:             100,
+  timeoutMs:            5000,
+})
+
+console.log(`Survival rate: ${report.survivalRate * 100}%`)
+console.log(`Recommendation: ${report.recommendation}`)
+```
+
+## Six attack vectors
+
+### rapid_fire
+
+One agent submits N transactions in rapid succession, each just under the per-tx cap. Tests timing races against the cap lock. Three scenarios: simultaneous burst, jittered burst, multi-agent burst.
+
+### coordinated_drain
+
+Multiple agents coordinate to drain a shared cap simultaneously. Tests whether two-phase cap locking prevents collective over-spend. Three scenarios: simultaneous, 1ms-staggered, two-wave.
+
+### rpc_failure
+
+Injects RPC failures at simulation and execution stages. Tests that the pipeline returns well-defined results rather than throwing unhandled exceptions. Three scenarios: simulation-stage failure, execution-stage failure, intermittent failure.
+
+### stale_simulation
+
+Injects simulation staleness beyond the configured threshold. Tests the `simulationStalenessMs` check. Two scenarios: 2× threshold, threshold+1.
+
+### cap_boundary
+
+Off-by-one tests around `maxSpendPerTx`. Tests exact cap, cap+1n, cap-1n, and zero amount. Four scenarios.
+
+### approval_flood
+
+Multiple agents simultaneously submit transactions above the approval threshold. Tests approval timeout handling. Two scenarios.
+
+## RiskReport
+
+```typescript
+interface RiskReport {
+  survivalRate:    number                    // fraction of scenarios with well-defined results
+  byVector:        Record<string, VectorStats>
+  bySeverity:      Record<string, number>
+  failedScenarios: FailedScenario[]         // sorted by severity
+  recommendation:  string                   // actionable guidance
+}
+```
+
+`recommendation` suggests circuit breaker, rate limiting, cap tuning, or other mitigations based on failure patterns.
+
+## ScenarioOutcome
+
+```typescript
+type ScenarioOutcome =
+  | 'survived'          // pipeline returned a well-defined ExecutionResult
+  | 'system_error'      // unhandled exception escaped runPipeline
+  | 'timeout'           // scenario exceeded timeoutMs
+  | 'false_acceptance'  // reserved for future detection
+  | 'false_rejection'   // reserved for future detection
+```
+
+`system_error` is the most serious outcome — it means an exception escaped the pipeline boundary.
+
+## Selecting vectors
+
+```typescript
+const report = await stressTest(policy, {
+  vectors: ['rapid_fire', 'cap_boundary'],
+})
+```
+
+## CLI
+
+```bash
+txfence stress-test --config ./txfence.config.ts \
+  --agents 10 \
+  --transactions 20 \
+  --vectors rapid_fire,cap_boundary \
+  --only-failures \
+  --json
+```
+
+Exits 0 when all scenarios survive, 1 when any fail — CI-friendly.

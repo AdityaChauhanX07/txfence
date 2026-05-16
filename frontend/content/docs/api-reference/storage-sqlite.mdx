@@ -1,0 +1,46 @@
+---
+title: "@txfence/storage-sqlite"
+description: SQLite receipt storage for local development and single-process staging.
+---
+
+# @txfence/storage-sqlite
+
+SQLite `ReceiptStore` implementation for local development and single-process staging environments.
+
+## Installation
+
+```bash
+npm install @txfence/storage-sqlite better-sqlite3
+```
+
+## Setup
+
+```typescript
+import { createSqliteReceiptStore, initSchema } from '@txfence/storage-sqlite'
+import Database from 'better-sqlite3'
+
+const db = new Database('./receipts.db')
+initSchema(db)
+
+const receiptStore = createSqliteReceiptStore(db)
+```
+
+`initSchema` is synchronous and idempotent.
+
+## In-memory database
+
+For tests, pass `':memory:'`:
+
+```typescript
+const db = new Database(':memory:')
+```
+
+## Options
+
+```typescript
+createSqliteReceiptStore(db, { tableName: 'txfence_receipts' })
+```
+
+## When to use
+
+SQLite for local development and single-process staging. PostgreSQL (`@txfence/storage-pg`) for production multi-process deployments where multiple agents write concurrently.

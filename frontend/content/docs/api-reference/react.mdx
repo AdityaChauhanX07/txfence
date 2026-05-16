@@ -7,139 +7,211 @@ import { Callout } from "nextra/components";
 
 # @txfence/react
 
-React hooks for building frontends that interact with a txfence agent.
+React hooks for building frontends on top of txfence agents. Chain-agnostic — no dependency on `@txfence/evm` or viem; inject your own adapters.
 
-## Setup
+## Installation
 
-Wrap your app with `TxfenceProvider`:
-
-```tsx
-import { TxfenceProvider } from '@txfence/react'
-
-export default function App({ children }) {
-  return (
-    <TxfenceProvider agentUrl="https://your-txfence-agent.example.com">
-      {children}
-    </TxfenceProvider>
-  )
-}
+```bash
+npm install @txfence/react @txfence/core @txfence/evm
 ```
 
----
+## useAgent
 
-## `useAgent`
-
-Returns the current agent configuration and connection status.
+Creates a stable agent instance memoized for the component lifetime.
 
 ```typescript
-function useAgent(): {
-  connected: boolean;
-  policy: Policy | null;
-  chains: ChainId[];
-  error: Error | null;
-}
-```
-
----
-
-## `useSimulate`
-
-Simulates an action without submitting it.
-
-```typescript
-function useSimulate(): {
-  simulate: (action: Action) => Promise<SimulationResult>;
-  result: SimulationResult | null;
-  loading: boolean;
-  error: Error | null;
-}
+function useAgent(config: {
+  config:   AgentConfig
+  adapters: ChainAdapters
+  rpcUrls:  Record<ChainId, string>
+  executor: Executor
+}): Agent
 ```
 
 ```tsx
-function TransferPreview({ action }: { action: TransferAction }) {
-  const { simulate, result, loading } = useSimulate()
+import { useAgent } from '@txfence/react'
+import { simulateEvmAction, executeEvmAction, privateKeySigner } from '@txfence/evm'
 
-  useEffect(() => {
-    simulate(action)
-  }, [action])
+const signer = privateKeySigner(import.meta.env.VITE_PRIVATE_KEY)
 
-  if (loading) return <Spinner />
-  if (result?.wouldRevert) return <Alert>This transfer would fail: {result.revertReason}</Alert>
-  return <GasEstimate value={result?.gasEstimate} />
+function MyComponent() {
+  const agent = useAgent({
+    config: {
+      chains:   ['ethereum'],
+      policies: policy,
+      signer,
+    },
+    adapters: { ethereum: { simulate: simulateEvmAction } },
+    rpcUrls:  { ethereum: 'https://ethereum.publicnode.com' },
+    executor: (action, chainId, rpcUrl, evaluation, simulation) =>
+      executeEvmAction(action, chainId, rpcUrl, signer, evaluation, simulation),
+  })
+
+  // use agent.submit(), agent.dryRun(), agent.executeIntent()
 }
 ```
 
----
+## useSubmit
 
-## `useSubmit`
-
-Submits an action through the full txfence pipeline.
+Wraps the full pipeline with loading, result, and error state.
 
 ```typescript
-function useSubmit(): {
-  submit: (action: Action, options?: { dryRun?: boolean }) => Promise<PipelineResult>;
-  result: PipelineResult | null;
-  loading: boolean;
-  error: Error | null;
-  reset: () => void;
+function useSubmit(agent: Agent): {
+  submit:  (action: Action, policy: Policy) => Promise<void>
+  result:  ExecutionResult | null
+  loading: boolean
+  error:   Error | null
 }
 ```
-
-<Callout type="info">
-  `dryRun: true` by default. Pass `dryRun: false` to execute on-chain after the user confirms.
-</Callout>
-
----
-
-## `useReceipt`
-
-Fetches a stored receipt by transaction hash.
-
-```typescript
-function useReceipt(txHash: string | null): {
-  receipt: SuccessReceipt | null;
-  loading: boolean;
-  error: Error | null;
-}
-```
-
----
-
-## Example: `TransferButton`
 
 ```tsx
-import { useSubmit } from '@txfence/react'
-import type { TransferAction } from '@txfence/core'
+import { useAgent, useSubmit } from '@txfence/react'
 
-export function TransferButton({ to, amount }: { to: string; amount: bigint }) {
-  const { submit, result, loading } = useSubmit()
-
-  const action: TransferAction = {
-    kind: 'transfer',
-    chain: 'ethereum',
-    token: { token: 'ETH', amount, decimals: 18 },
-    to,
-  }
-
-  const handleClick = async () => {
-    // First: dry run
-    const preview = await submit(action, { dryRun: true })
-    if (preview.status !== 'success') {
-      console.error('Would fail:', preview)
-      return
-    }
-    // Then: execute
-    await submit(action, { dryRun: false })
-  }
-
-  if (result?.status === 'success') {
-    return <p>Sent! Tx: {result.receipt.txHash}</p>
-  }
+function TransferButton() {
+  const agent  = useAgent({ config, adapters, rpcUrls, executor })
+  const { result, loading, submit } = useSubmit(agent)
 
   return (
-    <button onClick={handleClick} disabled={loading}>
-      {loading ? 'Sending...' : 'Send ETH'}
+    <button onClick={() => submit(action, policy)} disabled={loading}>
+      {loading ? 'submitting...' : 'send'}
     </button>
   )
 }
 ```
+
+`result.status` is one of: `success`, `policy_rejected`, `simulation_failed`, `approval_timeout`, `execution_failed`, `simulation_stale`.
+
+## useSimulate
+
+Wraps adapter simulation with loading, result, and error state.
+
+```typescript
+function useSimulate(agent: Agent): {
+  simulate: (action: Action) => Promise<void>
+  result:   SimulationResult | null
+  loading:  boolean
+  error:    Error | null
+}
+```
+
+```tsx
+function SimulationPreview({ action }: { action: Action }) {
+  const agent = useAgent({ config, adapters, rpcUrls, executor })
+  const { simulate, result, loading } = useSimulate(agent)
+
+  useEffect(() => { simulate(action) }, [action])
+
+  if (loading) return <span>simulating...</span>
+  if (result?.wouldRevert) return <span>would revert: {result.revertReason}</span>
+  return <span>gas estimate: {result?.gas?.toLocaleString()}</span>
+}
+```
+
+## useReceipt
+
+Polls for a transaction receipt using a caller-supplied chain-specific fetcher.
+
+```typescript
+function useReceipt(
+  txHash:  string | null,
+  fetcher: (txHash: string) => Promise<SuccessReceipt | null>,
+  options?: { pollIntervalMs?: number }
+): {
+  receipt: SuccessReceipt | null
+  loading: boolean
+  error:   Error | null
+}
+```
+
+```tsx
+function ReceiptStatus({ txHash }: { txHash: string }) {
+  const { receipt, loading } = useReceipt(txHash, fetchEvmReceipt)
+
+  if (loading) return <span>waiting for confirmation...</span>
+  if (receipt) return <span>confirmed in block {receipt.blockNumber.toString()}</span>
+  return null
+}
+```
+
+## useDryRun
+
+Wraps `agent.dryRun()` with loading and result state.
+
+```typescript
+function useDryRun(agent: Agent): {
+  dryRun:  (action: Action, policy: Policy) => Promise<void>
+  result:  DryRunResult | null
+  loading: boolean
+  error:   Error | null
+}
+```
+
+```tsx
+function PreflightCheck({ action, policy }: { action: Action; policy: Policy }) {
+  const agent = useAgent({ config, adapters, rpcUrls, executor })
+  const { dryRun, result, loading } = useDryRun(agent)
+
+  useEffect(() => { dryRun(action, policy) }, [action])
+
+  if (loading) return <span>checking...</span>
+  if (!result) return null
+  if (result.wouldProceed) return <span>✓ ready to submit</span>
+  return <span>blocked: {result.blockers.map(b => b.kind).join(', ')}</span>
+}
+```
+
+## useIntentSubmit
+
+Wraps `agent.executeIntent()` with loading, result, and error state.
+
+```typescript
+function useIntentSubmit(agent: Agent): {
+  executeIntent: (intent: Intent, options?: { dryRun?: boolean }) => Promise<void>
+  result:        IntentExecutionResult | null
+  loading:       boolean
+  error:         Error | null
+}
+```
+
+```tsx
+function IntentButton({ intent }: { intent: Intent }) {
+  const agent = useAgent({ config, adapters, rpcUrls, executor })
+  const { executeIntent, result, loading } = useIntentSubmit(agent)
+
+  return (
+    <button onClick={() => executeIntent(intent)} disabled={loading}>
+      {loading ? 'executing...' : 'execute intent'}
+    </button>
+  )
+}
+```
+
+## useAgentHealth
+
+Polls `agent.health()` at a configurable interval.
+
+```typescript
+function useAgentHealth(
+  agent:   Agent,
+  options?: { pollIntervalMs?: number }
+): AgentHealth
+```
+
+```tsx
+function HealthIndicator() {
+  const agent  = useAgent({ config, adapters, rpcUrls, executor })
+  const health = useAgentHealth(agent, { pollIntervalMs: 5000 })
+
+  return (
+    <span>
+      {health.status} · {health.inFlight} in-flight · uptime {Math.floor(health.uptime / 1000)}s
+    </span>
+  )
+}
+```
+
+`AgentHealth` fields: `status` (`'healthy'` | `'shutting_down'`), `inFlight`, `uptime`.
+
+<Callout type="info">
+  `useAgentHealth` is useful for Kubernetes readiness UI — show a degraded state in your frontend when the agent is draining.
+</Callout>

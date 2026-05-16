@@ -1,0 +1,93 @@
+---
+title: Multi-Agent Coordination
+description: Intent claiming, priority ordering, and transaction rate limiting for multi-agent deployments.
+---
+
+# Multi-Agent Coordination
+
+When multiple agents operate concurrently, they need coordination mechanisms to avoid duplicate execution, respect priority ordering, and stay within rate limits. `AgentCoordinator` provides intent claiming (deduplication), priority comparison, and sliding-window transaction rate limiting.
+
+## Setup
+
+```typescript
+import { createMemoryAgentCoordinator } from '@txfence/core'
+
+const coordinator = createMemoryAgentCoordinator()
+
+coordinator.registerAgent({
+  agentId:  'agent-treasury-01',
+  priority: 10,
+  maxTransactionsPerWindow: {
+    count:    20,
+    windowMs: 60_000,
+  },
+})
+```
+
+`createMemoryAgentCoordinator` is for single-process multi-agent setups. A Redis-backed implementation for distributed deployments is planned.
+
+## Intent claiming
+
+Prevent two agents from executing the same intent simultaneously:
+
+```typescript
+const claim = await coordinator.claimIntent('intent-abc-123', 'agent-treasury-01', 30_000)
+
+if (claim.claimed) {
+  // this agent owns the intent — safe to execute
+  try {
+    await agent.executeIntent(intent)
+  } finally {
+    await coordinator.releaseIntent('intent-abc-123', 'agent-treasury-01')
+  }
+} else {
+  console.log(`Already claimed by ${claim.claimedBy}, expires ${claim.expiresAt}`)
+}
+```
+
+Same agent re-claiming an active intent refreshes the TTL rather than failing. Expired claims are automatically reclaimed by any agent. Wrong-agent release is a no-op.
+
+## Intent ID helpers
+
+Deterministic intent IDs from action parameters:
+
+```typescript
+import { getIntentId, getIntentIdWithNonce } from '@txfence/core'
+
+const id = getIntentId(action)
+// same action always produces same ID — use for deduplication
+
+const uniqueId = getIntentIdWithNonce(action, nonce)
+// use when the same action should be distinct (e.g. two transfers of the same amount)
+```
+
+Both use SHA-256 of canonical JSON via `bigintReplacer`.
+
+## Priority
+
+```typescript
+coordinator.registerAgent({ agentId: 'agent-a', priority: 10 })
+coordinator.registerAgent({ agentId: 'agent-b', priority: 5  })
+
+const cmp = coordinator.comparePriority('agent-a', 'agent-b')
+// positive = agent-a has higher priority
+// negative = agent-b has higher priority
+// 0 = equal
+```
+
+Unregistered agents default to priority 0.
+
+## Rate limiting
+
+```typescript
+const limited = coordinator.isRateLimited('agent-treasury-01')
+
+if (!limited) {
+  coordinator.recordTransaction('agent-treasury-01')
+  await agent.submit({ action, policy })
+}
+
+const count = coordinator.getTransactionCount('agent-treasury-01', 60_000)
+```
+
+Sliding window — transactions from before the window are automatically pruned. `recordTransaction` adds a timestamp; `isRateLimited` checks if the count meets `maxTransactionsPerWindow.count`.

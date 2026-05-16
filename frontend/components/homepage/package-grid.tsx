@@ -62,6 +62,16 @@ const PACKAGES: Pkg[] = [
     tag: "Tooling",
   },
   {
+    name: "@txfence/verify",
+    role: "Formal policy verification — bounded model checking, counterexample generation, and adversarial stress testing",
+    tag: "Tooling",
+  },
+  {
+    name: "@txfence/provenance",
+    role: "Cryptographic provenance chains with hash chaining, Merkle proofs, and tamper-evident audit trails",
+    tag: "Tooling",
+  },
+  {
     name: "@txfence/mcp",
     role: "MCP server exposing txfence as tools for any MCP-compatible AI assistant",
     tag: "Tooling",
@@ -131,7 +141,7 @@ export function PackageGrid() {
             lineHeight: 1.3,
           }}
         >
-          15 packages. One mission.
+          17 packages. One mission.
         </h2>
 
         {/* Subheadline */}

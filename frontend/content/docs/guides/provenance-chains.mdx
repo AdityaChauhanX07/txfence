@@ -1,0 +1,102 @@
+---
+title: Provenance Chains
+description: Cryptographic hash chaining and Merkle proofs for tamper-evident audit trails.
+---
+
+# Provenance Chains
+
+Provenance chains provide cryptographic tamper evidence for pipeline decisions. Each record includes the SHA-256 hash of the previous record — modifying any entry invalidates all subsequent hashes, making tampering detectable. Merkle proofs allow compact verification that a specific record exists without revealing others.
+
+## Setup
+
+```typescript
+import { createAgent } from '@txfence/core'
+import { createFileProvenanceChain } from '@txfence/provenance'
+
+const chain = createFileProvenanceChain('./provenance.jsonl')
+
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  undefined, undefined, undefined, undefined,
+  undefined, undefined, undefined, undefined,
+  undefined, undefined, chain  // 15th parameter
+)
+```
+
+## Backends
+
+`createMemoryProvenanceChain()` — in-memory, for testing.
+
+`createFileProvenanceChain(path)` — JSONL file with atomic write-then-rename appends. Survives process crashes without corruption.
+
+## ProvenanceRecord
+
+Each record captures every input to an authorization decision:
+
+```typescript
+interface ProvenanceRecord {
+  agentId:          string
+  policyVersionId:  string
+  action:           Action
+  simulationResult: SimulationResult | null
+  approvalDecision: ApprovalDecision | null
+  submittedAtBlock: bigint
+  outcome:          string
+  receipt:          SuccessReceipt | null
+}
+```
+
+## Verifying integrity
+
+```typescript
+const result = await chain.verify()
+
+if (!result.valid) {
+  for (const violation of result.violations) {
+    console.error(`Violation at index ${violation.index}: ${violation.kind}`)
+    // kind: 'hash_mismatch' | 'chain_broken' | 'invalid_hash'
+  }
+}
+```
+
+Run this on a schedule or before any compliance audit.
+
+## Merkle proofs
+
+Prove a specific record exists without revealing the full chain:
+
+```typescript
+const root  = await chain.getMerkleRoot()
+const proof = await chain.generateProof(entryHash)
+const valid = await chain.verifyProof(proof)
+```
+
+The Merkle root commits to all records. Share the root publicly and generate proofs on demand — each proof is O(log n) in size.
+
+## Hash chaining
+
+Each entry's hash is computed as:
+SHA-256(previousHash + canonicalJSON(record))
+
+The first entry uses `GENESIS_HASH` (`'0'.repeat(64)`). Canonical JSON sorts all keys and serializes bigints as strings for deterministic output.
+
+## CLI
+
+```bash
+# Verify chain integrity
+txfence provenance verify --chain ./provenance.jsonl
+
+# Generate a Merkle proof for a specific record
+txfence provenance proof --chain ./provenance.jsonl --hash <entryHash>
+
+# JSON output for CI
+txfence provenance verify --chain ./provenance.jsonl --json
+```
+
+Both commands exit 0 when valid, 1 when invalid.
+
+## Known limitations
+
+- `agentId` in pipeline-recorded entries is `'unknown'` — the pipeline does not have agent identity. For named agent IDs, record provenance directly via `chain.append()`.
+- Chain file must be stored on tamper-evident infrastructure for strict compliance.
+- No PostgreSQL or S3 backend yet — planned.

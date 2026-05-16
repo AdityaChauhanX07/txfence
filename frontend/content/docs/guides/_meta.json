@@ -1,0 +1,20 @@
+{
+  "dry-run": "Dry Run Mode",
+  "composite-policies": "Composite Policies",
+  "policy-versioning": "Policy Versioning",
+  "config-validation": "Config Validation",
+  "audit-log": "Audit Log",
+  "provenance-chains": "Provenance Chains",
+  "telemetry": "Telemetry",
+  "notifications": "Notifications",
+  "formal-verification": "Formal Verification",
+  "stress-testing": "Stress Testing",
+  "mev-protection": "MEV Protection",
+  "circuit-breaker": "Circuit Breaker",
+  "intent-execution": "Intent Execution",
+  "multi-agent": "Multi-Agent Coordination",
+  "temporal-rules": "Temporal Rules",
+  "replay": "Replay & Backtesting",
+  "agent-health": "Agent Health & Shutdown",
+  "fork-simulation": "Fork Simulation"
+}

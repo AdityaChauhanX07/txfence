@@ -1,0 +1,95 @@
+---
+title: "@txfence/verify"
+description: Formal policy verification — bounded model checking with counterexample generation and adversarial stress testing.
+---
+
+# @txfence/verify
+
+Formal verification and adversarial stress testing for txfence policies. Catches policy misconfiguration before deployment.
+
+## Installation
+
+```bash
+npm install @txfence/verify
+```
+
+## Formal verification
+
+Three properties can be verified:
+
+### absolute_cap_reachability
+
+Can N agents × M transactions reach or exceed the absolute cap?
+
+```typescript
+import { verify } from '@txfence/verify'
+
+const result = await verify({
+  kind: 'absolute_cap_reachability',
+  policy,
+  agentCount: 10,
+  transactionsPerAgent: 10,
+})
+// result.status: 'holds' | 'violated'
+// result.counterExample — minimal counterexample when violated
+```
+
+### rolling_window_saturation
+
+Can N agents collectively exceed a rolling window cap through adversarial scheduling?
+
+```typescript
+const result = await verify({
+  kind: 'rolling_window_saturation',
+  policy,
+  agentCount: 5,
+  transactionsPerAgent: 20,
+})
+```
+
+### policy_containment
+
+Is every action allowed by `innerPolicy` also allowed by `outerPolicy`?
+
+```typescript
+const result = await verify({
+  kind: 'policy_containment',
+  innerPolicy,
+  outerPolicy,
+})
+```
+
+## Adversarial stress testing
+
+Six attack vectors tested against the policy:
+
+```typescript
+import { stressTest } from '@txfence/verify'
+
+const report = await stressTest(policy, {
+  agentCount: 10,
+  transactionsPerAgent: 20,
+})
+
+console.log(report.survivalRate)
+console.log(report.recommendation)
+```
+
+**Six vectors:** `rapid_fire`, `coordinated_drain`, `rpc_failure`, `stale_simulation`, `cap_boundary`, `approval_flood`.
+
+`RiskReport` includes: `survivalRate`, `byVector`, `bySeverity`, `failedScenarios`, `recommendation`.
+
+## CLI
+
+```bash
+txfence verify absolute-cap --config ./txfence.config.ts
+txfence verify rolling-window --config ./txfence.config.ts
+txfence verify policy-contains --config ./txfence.config.ts
+txfence stress-test --config ./txfence.config.ts --agents 10 --transactions 20
+```
+
+All commands exit 0 when the property holds, 1 when violated — CI-friendly.
+
+## Important
+
+Bounded verification only. A property that holds for N=10, M=10 may still be violated for larger values. Document your bounds.

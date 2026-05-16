@@ -1,0 +1,81 @@
+---
+title: MEV Protection
+description: Route transactions through Flashbots or MEV Blocker to prevent sandwich attacks.
+---
+
+# MEV Protection
+
+MEV (Maximal Extractable Value) attacks — particularly sandwich attacks — can cause agents to execute at worse prices than simulated. txfence integrates with Flashbots Protect and MEV Blocker to route transactions through protected endpoints, preventing frontrunning and sandwiching.
+
+## Policy field
+
+```typescript
+import type { Policy, MevProtectionMode } from '@txfence/core'
+
+const policy: Policy = {
+  // ...other fields...
+  mevProtection: 'flashbots',  // 'flashbots' | 'mev-blocker' | 'none'
+}
+```
+
+`mevProtection` is a per-transaction policy decision. Swaps can use Flashbots while transfers use `'none'`.
+
+Only applies to EVM chains. Solana and Cosmos adapters ignore this field.
+
+## Modes
+
+### flashbots
+
+Routes broadcast through `https://rpc.flashbots.net`. Transactions are submitted to Flashbots builders directly, bypassing the public mempool entirely.
+
+```typescript
+const policy: Policy = {
+  mevProtection: 'flashbots',
+}
+```
+
+### mev-blocker
+
+Routes broadcast through `https://rpc.mevblocker.io`. MEV Blocker distributes transactions to a network of searchers who compete to include them without sandwiching.
+
+```typescript
+const policy: Policy = {
+  mevProtection: 'mev-blocker',
+}
+```
+
+### none (default)
+
+Standard RPC broadcast. No MEV protection.
+
+## Custom endpoints
+
+```typescript
+import type { MevProtectionConfig } from '@txfence/core'
+
+const mevConfig: MevProtectionConfig = {
+  flashbots: {
+    endpoint: 'https://rpc.flashbots.net/fast',
+  },
+  mevBlocker: {
+    endpoint: 'https://rpc.mevblocker.io',
+  },
+}
+```
+
+Pass `mevConfig` to `executeEvmAction` via your executor.
+
+## How it works
+
+`getMevProtectedRpcUrl(mode, config?, fallbackRpcUrl?)` — resolves the broadcast endpoint.
+
+`broadcastWithMevProtection(signedTx, mode, config?, fallbackRpcUrl?)` — sends `eth_sendRawTransaction` to the protected endpoint.
+
+`broadcastAndConfirm` and `executeEvmAction` thread `mevProtection` and `mevConfig` through automatically when set on the policy.
+
+## Known limitations
+
+- Flashbots auth signing (`X-Flashbots-Signature`) requires ECDSA secp256k1 — deferred to v2. Unsigned requests still receive MEV protection, just without reputation scoring.
+- EVM only — no Solana or Cosmos MEV protection.
+- Both endpoints require internet access — not suitable for air-gapped environments.
+- Flashbots Protect may have higher latency than standard RPC submission.

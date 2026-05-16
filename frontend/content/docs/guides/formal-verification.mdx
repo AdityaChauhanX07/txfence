@@ -1,0 +1,120 @@
+---
+title: Formal Verification
+description: Bounded model checking for policy invariants — prove your caps hold before deploying.
+---
+
+import { Callout } from "nextra/components";
+
+# Formal Verification
+
+`@txfence/verify` provides bounded model checking for policy invariants. Given a policy and bounds, it either proves the property holds or produces a concrete counterexample showing how it can be violated. Use it in CI to catch policy misconfiguration before deployment.
+
+## Installation
+
+```bash
+npm install @txfence/verify
+```
+
+## Three properties
+
+### absolute_cap_reachability
+
+Can N agents × M transactions reach or exceed the absolute cap?
+
+```typescript
+import { verify } from '@txfence/verify'
+
+const result = await verify({
+  kind:                  'absolute_cap_reachability',
+  policy,
+  agentCount:            10,
+  transactionsPerAgent:  10,
+})
+
+if (result.status === 'violated') {
+  console.error('Cap can be exceeded:', result.counterExample)
+}
+```
+
+Arithmetic check: `agentCount × transactionsPerAgent × maxSpendPerTx` vs `capAmount`. Generates the minimal counterexample — only the transactions needed to exceed the cap.
+
+### rolling_window_saturation
+
+Can N agents collectively exceed a rolling window cap through adversarial scheduling?
+
+```typescript
+const result = await verify({
+  kind:                 'rolling_window_saturation',
+  policy,
+  agentCount:           5,
+  transactionsPerAgent: 20,
+})
+```
+
+Tests four adversarial scenarios: simultaneous burst, staggered burst, double burst, worst-case single agent. Counterexample shows exact timestamps and amounts that cause the violation.
+
+### policy_containment
+
+Is every action allowed by `innerPolicy` also allowed by `outerPolicy`?
+
+```typescript
+const result = await verify({
+  kind:        'policy_containment',
+  innerPolicy: stricterPolicy,
+  outerPolicy: broaderPolicy,
+})
+```
+
+Uses `createTestActions` + `diffPolicies` internally. Flags `newly_rejected` actions as containment violations. Use this to verify that tightening a policy doesn't accidentally block actions that should still be allowed.
+
+## VerificationResult
+
+```typescript
+type VerificationResult =
+  | { status: 'holds';   checkedBound: number; scenariosChecked: number; durationMs: number }
+  | { status: 'violated'; counterExample: CounterExample; durationMs: number }
+  | { status: 'unknown';  reason: string; durationMs: number }
+```
+
+## CounterExample
+
+```typescript
+interface CounterExample {
+  description:    string
+  transactions:   Array<{ agentId: string; action: Action; timestamp: number; amount: bigint }>
+  violatedAt:     number
+  violatedAmount: bigint
+  capLimit:       bigint
+  checkedBound:   number
+}
+```
+
+## verifyAll
+
+Run multiple properties in parallel:
+
+```typescript
+import { verifyAll } from '@txfence/verify'
+
+const results = await verifyAll([
+  { kind: 'absolute_cap_reachability', policy, agentCount: 10, transactionsPerAgent: 10 },
+  { kind: 'rolling_window_saturation', policy, agentCount: 5,  transactionsPerAgent: 20 },
+])
+```
+
+## CLI
+
+```bash
+txfence verify absolute-cap   --config ./txfence.config.ts
+txfence verify rolling-window --config ./txfence.config.ts
+txfence verify policy-contains --config ./txfence.config.ts
+
+# JSON output
+txfence verify absolute-cap --config ./txfence.config.ts --json
+```
+
+All commands exit 0 when the property holds, 1 when violated — CI-friendly.
+
+<Callout type="warning">
+  Bounded verification only. A property that holds for N=10, M=10 may still be violated for larger values. Always document your bounds. A Z3 SMT backend for complete proofs is planned.
+</Callout>

@@ -1,0 +1,87 @@
+---
+title: Dry Run Mode
+description: Run the full pipeline without executing on-chain. Test policies and simulate actions safely.
+---
+
+import { Callout } from "nextra/components";
+
+# Dry Run Mode
+
+Dry run mode runs the full txfence pipeline — policy check, temporal rules, simulation, and approval threshold check — without broadcasting a transaction or writing to the audit log. Use it to test policies, validate actions before execution, and build CI gates.
+
+## agent.dryRun()
+
+```typescript
+import { createAgent } from '@txfence/core'
+
+const agent = createAgent(config, adapters, rpcUrls, executor)
+
+const result = await agent.dryRun({
+  action: {
+    kind:  'transfer',
+    chain: 'ethereum',
+    token: { token: 'ETH', amount: 100000000000000000n, decimals: 18 },
+    to:    '0xRECIPIENT',
+  },
+  policy: agent.config.policies,
+})
+
+console.log(result.wouldProceed)  // true if all checks pass
+console.log(result.blockers)      // array of DryRunBlocker
+```
+
+## DryRunResult
+
+```typescript
+interface DryRunResult {
+  wouldProceed:      boolean
+  blockers:          DryRunBlocker[]
+  evaluation:        PolicyEvaluation
+  simulation?:       SimulationResult
+  approvalRequired:  boolean
+  approvalThreshold: TokenAmount
+  capLockAvailable:  boolean
+  dryRunAt:          number
+}
+```
+
+`wouldProceed: true` only when all checks pass with zero blockers.
+
+## DryRunBlocker
+
+Five blocker kinds:
+
+```typescript
+type DryRunBlocker =
+  | { kind: 'policy_rejected';       rejectionReason: PolicyRejectionReason }
+  | { kind: 'simulation_failed';     caveats: string[] }
+  | { kind: 'simulation_stale';      stalenessMs: number }
+  | { kind: 'approval_required';     threshold: TokenAmount }
+  | { kind: 'cap_lock_unavailable';  capId: string }
+```
+
+## Cap lock behavior
+
+Cap locks are acquired then immediately released during dry run. This tests budget availability without consuming it — another agent can still acquire the same budget after the dry run completes.
+
+## runDryRun
+
+For use outside `createAgent`:
+
+```typescript
+import { runDryRun } from '@txfence/core'
+
+const result = await runDryRun(action, policy, adapters, rpcUrls)
+```
+
+## CLI
+
+```bash
+txfence dry-run --kind transfer --chain ethereum --to 0xRECIPIENT --token ETH --amount 100000000000000000
+```
+
+Exits 0 if execution would proceed, 1 if anything would block. CI-friendly.
+
+<Callout type="info">
+  `txfence submit` defaults to dry-run mode. Pass `--execute` to broadcast a real transaction.
+</Callout>

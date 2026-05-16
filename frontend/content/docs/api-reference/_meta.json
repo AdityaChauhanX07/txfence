@@ -3,6 +3,13 @@
   "evm": "@txfence/evm",
   "solana": "@txfence/solana",
   "cosmos": "@txfence/cosmos",
+  "redis": "@txfence/redis",
+  "storage-pg": "@txfence/storage-pg",
+  "storage-sqlite": "@txfence/storage-sqlite",
+  "audit": "@txfence/audit",
+  "monitor": "@txfence/monitor",
+  "verify": "@txfence/verify",
+  "provenance": "@txfence/provenance",
   "mcp": "@txfence/mcp",
   "cli": "@txfence/cli",
   "react": "@txfence/react"

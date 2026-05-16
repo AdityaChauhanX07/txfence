@@ -1,0 +1,124 @@
+---
+title: Intent Execution
+description: Declare multi-step operations as a directed acyclic graph — txfence executes them in topological order.
+---
+
+import { Callout } from "nextra/components";
+
+# Intent Execution
+
+An intent is a directed acyclic graph (DAG) of steps. Each step is an action with optional dependencies on other steps. txfence validates the graph, evaluates each step against policy, and executes them in topological order — handling partial failures, poisoned downstream steps, and timeout enforcement.
+
+## Intent structure
+
+```typescript
+import type { Intent, IntentStep } from '@txfence/core'
+
+const intent: Intent = {
+  id:    'treasury-rebalance-001',
+  steps: [
+    {
+      id:     'withdraw',
+      action: {
+        kind:  'transfer',
+        chain: 'ethereum',
+        token: { token: 'USDC', amount: 10000n * 10n**6n, decimals: 6 },
+        to:    '0xINTERMEDIARY',
+      },
+    },
+    {
+      id:           'swap',
+      dependsOn:    ['withdraw'],   // runs after withdraw succeeds
+      action: {
+        kind:        'swap',
+        chain:       'ethereum',
+        fromToken:   { token: 'USDC', amount: 10000n * 10n**6n, decimals: 6 },
+        toToken:     'ETH',
+        maxSlippage: 50,
+        to:          '0xE592427A0AEce92De3Edee1F18E0157C05861564',
+      },
+    },
+  ],
+  policy: {
+    maxTotalGrossSpend:      { token: 'USDC', amount: 20000n * 10n**6n, decimals: 6 },
+    maxSteps:                5,
+    requireAllSteps:         false,
+    maxDurationMs:           60000,
+    allowedChains:           ['ethereum'],
+  },
+}
+```
+
+## Executing an intent
+
+```typescript
+const result = await agent.executeIntent(intent, {
+  dryRun: false,
+})
+
+console.log(result.status)   // 'completed' | 'partial' | 'failed' | 'rejected'
+console.log(result.receipts) // Map<stepId, SuccessReceipt>
+```
+
+## validateIntentGraph
+
+Validate graph structure before execution:
+
+```typescript
+import { validateIntentGraph } from '@txfence/core'
+
+const validation = validateIntentGraph(intent)
+
+if (!validation.valid) {
+  console.error(validation.errors)
+  // 'cycle_detected' | 'duplicate_step_id' | 'missing_dependency'
+}
+
+console.log(validation.executionPlan) // topologically sorted step IDs
+```
+
+## Partial failure handling
+
+When `requireAllSteps: false`, a failed step poisons only its downstream dependents — other branches continue executing.
+
+```typescript
+import { getPoisonedSteps } from '@txfence/core'
+
+const poisoned = getPoisonedSteps('withdraw', intent.steps)
+// returns all steps transitively dependent on 'withdraw'
+```
+
+When `requireAllSteps: true`, any step failure aborts the entire intent.
+
+## IntentPolicy constraints
+
+```typescript
+interface IntentPolicy {
+  maxTotalGrossSpend?:      TokenAmount   // total outflow cap (single-token only in v1)
+  maxNetSpend?:             TokenAmount   // net position change cap
+  maxIntermediateExposure?: TokenAmount   // max exposure at any point during execution
+  maxSteps?:                number
+  requireAllSteps?:         boolean
+  maxDurationMs?:           number        // timeout — remaining steps marked 'abandoned'
+  allowedChains?:           ChainId[]
+}
+```
+
+## CLI
+
+```bash
+# Validate graph structure
+txfence intent validate --intent ./intent.json --config ./txfence.config.ts
+
+# Dry run
+txfence intent submit --intent ./intent.json --config ./txfence.config.ts --dry-run
+
+# Execute
+txfence intent submit --intent ./intent.json --config ./txfence.config.ts --execute
+```
+
+Exits 0 on completed, 2 on partial, 1 on failed/rejected.
+
+<Callout type="warning">
+  Multi-token spend constraints require a price oracle — `maxTotalGrossSpend` and `maxNetSpend` are only enforced for single-token intents in v1. Swap inflows (received token amounts) are unknown at evaluation time — position analysis tracks outflows only.
+</Callout>

@@ -1,0 +1,80 @@
+---
+title: "@txfence/provenance"
+description: Cryptographic provenance chains with hash chaining, Merkle proofs, and tamper-evident audit trails.
+---
+
+# @txfence/provenance
+
+Transaction-level provenance chains with cryptographic integrity. Each record includes the hash of the previous record — modifying any entry invalidates all subsequent records.
+
+## Installation
+
+```bash
+npm install @txfence/provenance
+```
+
+## createMemoryProvenanceChain
+
+For testing:
+
+```typescript
+import { createMemoryProvenanceChain } from '@txfence/provenance'
+
+const chain = createMemoryProvenanceChain()
+```
+
+## createFileProvenanceChain
+
+JSONL file backend with atomic appends:
+
+```typescript
+import { createFileProvenanceChain } from '@txfence/provenance'
+
+const chain = createFileProvenanceChain('./provenance.jsonl')
+```
+
+## Appending records
+
+```typescript
+await chain.append({
+  agentId: 'agent-0x123',
+  policyVersionId: 'abc123...',
+  action,
+  simulationResult,
+  approvalDecision,
+  submittedAtBlock: 21000000n,
+  outcome: 'success',
+  receipt,
+})
+```
+
+## Verifying integrity
+
+```typescript
+const result = await chain.verify()
+// result.valid: boolean
+// result.violations: Array<{ kind: 'hash_mismatch' | 'chain_broken' | 'invalid_hash', index: number }>
+```
+
+## Merkle proofs
+
+```typescript
+const root = await chain.getMerkleRoot()
+const proof = await chain.generateProof(entryHash)
+const valid = await chain.verifyProof(proof)
+```
+
+Compact proof that a specific record exists without revealing others.
+
+## Wiring into the pipeline
+
+Pass as the optional `provenanceChain` parameter (15th) to `runPipeline` or `createAgent`. Records all 6 outcome types automatically.
+
+## CLI
+
+```bash
+txfence provenance verify --chain ./provenance.jsonl
+txfence provenance proof --chain ./provenance.jsonl --hash <entryHash>
+```
+
+Exit 0 when valid, 1 when invalid — CI-friendly.

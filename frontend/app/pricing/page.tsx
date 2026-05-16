@@ -9,7 +9,7 @@ const openSourceFeatures = [
   "Full access to all 15 packages",
   "Self-hosted on your infrastructure",
   "Community support via GitHub Issues",
-  "252 tests, zero type errors",
+  "600+ tests, zero type errors",
   "EVM, Solana, and Cosmos adapters",
   "MCP server for AI assistant integration",
   "Complete audit log and monitor packages",

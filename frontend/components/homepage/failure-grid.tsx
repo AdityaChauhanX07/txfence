@@ -13,6 +13,12 @@ const FAILURE_MODES = [
   { mode: "unintended proxy target",       protection: "partial" as const, detail: "implementation hash pinning via metadata verification." },
   { mode: "stale allowlist",              protection: "partial" as const, detail: "contract metadata verification with expiry timestamps." },
   { mode: "gas estimation failure",        protection: "partial" as const, detail: "minimum buffer multiplier enforced (1.2x default)." },
+  { mode: "MEV sandwich attack",           protection: "full"    as const, detail: "Flashbots and MEV Blocker routing — transactions submitted via protected endpoints." },
+  { mode: "unauthorized approval exec.",   protection: "full"    as const, detail: "HMAC-signed webhooks with cancel-on-timeout — unsigned approvals are rejected." },
+  { mode: "policy configuration bug",      protection: "full"    as const, detail: "Formal verification and adversarial stress testing catch misconfigured policies before deployment." },
+  { mode: "audit trail tampering",         protection: "full"    as const, detail: "Cryptographic hash chaining and Merkle proofs — any modification invalidates subsequent records." },
+  { mode: "behavioral pattern attacks",    protection: "full"    as const, detail: "Temporal rules detect anomalous patterns — spend velocity, failure rate, approval floods over sliding windows." },
+  { mode: "multi-step partial failure",    protection: "full"    as const, detail: "Intent DAG execution poisons downstream steps on failure — no partial execution of dependent steps." },
 ] satisfies Array<{ mode: string; protection: "full" | "partial"; detail: string }>;
 
 // ─── FailureGrid ──────────────────────────────────────────────────────────────
@@ -66,7 +72,7 @@ export function FailureGrid() {
             marginBottom: "2.5rem",
           }}
         >
-          8 documented failure modes. Full or partial protection for each.
+          14 documented failure modes. Full or partial protection for each.
         </p>
 
         {/* Column headers */}

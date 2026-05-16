@@ -1,0 +1,75 @@
+---
+title: Telemetry
+description: OpenTelemetry-compatible span-based observability for the txfence pipeline.
+---
+
+# Telemetry
+
+txfence instruments the pipeline with spans compatible with OpenTelemetry. Every pipeline run produces a root span with child spans for each stage — policy evaluation, simulation, approval, and execution.
+
+## TelemetryProvider interface
+
+```typescript
+interface TelemetryProvider {
+  startSpan(name: string): Span
+}
+
+interface Span {
+  setAttribute(key: string, value: string | number | boolean): void
+  setStatus(status: 'ok' | 'error', message?: string): void
+  end(): void
+}
+```
+
+Structurally compatible with OpenTelemetry spans — any OTel tracer satisfies this interface.
+
+## Wiring into createAgent
+
+Pass as the 11th parameter to `createAgent`:
+
+```typescript
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  capLockProvider, metadataVerifier, receiptStore, approvalProvider,
+  receiptStore, auditLog,
+  telemetryProvider  // 11th parameter
+)
+```
+
+## Spans
+
+Five spans are created per pipeline run:
+
+| Span | Attributes |
+|---|---|
+| `txfence.pipeline` | `chain`, `action.kind`, `status`, `rejection_reason`, `tx_hash`, `confirmed_at_block`, `staleness_ms` |
+| `txfence.policy.evaluate` | — |
+| `txfence.simulation` | `provider`, `coverage`, `gas_estimate`, `would_revert` |
+| `txfence.approval` | — |
+| `txfence.execution` | — |
+
+`txfence.pipeline` ends in `finally` — guaranteed on every exit path including errors.
+
+## noopTelemetry
+
+When no provider is configured, `noopTelemetry` is used — a singleton no-op with zero allocations. `startSpan` always returns the same shared `noopSpan` object.
+
+```typescript
+import { noopTelemetry } from '@txfence/core'
+```
+
+## OpenTelemetry integration
+
+A `@txfence/telemetry-otel` package providing a real OpenTelemetry implementation is planned. In the meantime, wrap any OTel tracer:
+
+```typescript
+import { trace } from '@opentelemetry/api'
+
+const tracer = trace.getTracer('txfence')
+
+const telemetryProvider: TelemetryProvider = {
+  startSpan: (name) => tracer.startSpan(name),
+}
+```
+
+OTel spans have `setAttribute`, `setStatus`, and `end` — they satisfy the `Span` interface structurally.

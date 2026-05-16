@@ -35,7 +35,7 @@ const result = await agent.submit({
     token: { token: 'ETH', amount: 100000000000000000n, decimals: 18 },
     to:    '0xRECIPIENT',
   },
-  policy: agent.config.policies,
+  policy,
 })
 
 switch (result.status) {

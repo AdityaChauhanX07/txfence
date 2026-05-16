@@ -1,6 +1,6 @@
 ---
 title: Core Concepts
-description: The policy object, action types, evaluation pipeline, and key primitives in txfence.
+description: The Policy object, Action types, evaluation pipeline, and key primitives in txfence.
 ---
 
 import { Callout } from "nextra/components";
@@ -9,131 +9,147 @@ import { Callout } from "nextra/components";
 
 ## The Policy Object
 
-A policy is a typed configuration object that declares what an agent is allowed to do.
+A policy is a flat typed configuration object that declares what an agent is allowed to do. You pass it to `createAgent` or `runPipeline` — there are no rules arrays, no match clauses, no defaults object.
 
 ```typescript
-interface Policy {
-  id: string;           // unique identifier
-  version: string;      // semver, used for audit logs
-  rules: Rule[];        // evaluated top-to-bottom, first match wins
-  defaults: {
-    effect: "allow" | "deny";  // what to do if no rule matches
-  };
+import type { Policy } from '@txfence/core'
+
+const policy: Policy = {
+  chains:                 ['ethereum'],
+  maxSpendPerTx:          { token: 'USDC', amount: 1000n, decimals: 6 },
+  allowedContracts:       [{ address: '0xYOUR_CONTRACT', chain: 'ethereum' }],
+  requireSimulation:      true,
+  gasBufferMultiplier:    1.2,
+  humanApprovalThreshold: { token: 'USDC', amount: 10000n, decimals: 6 },
+  humanApprovalTimeoutMs: 30000,
+  capLockMode:            'per-agent',
 }
 ```
 
-### Rules
+### Key fields
 
-Each rule has a **match** clause (which actions it applies to) and a **condition** (the constraint to evaluate). If the condition passes, the rule's `effect` is applied. If `effect` is omitted, it defaults to `"allow"`.
+`chains` — the only chains this agent is permitted to operate on. Any action on an unlisted chain is rejected immediately.
 
-```typescript
-interface Rule {
-  id: string;
-  description?: string;
-  match: MatchClause;
-  condition?: Condition;
-  effect?: "allow" | "deny";  // default: "allow"
-}
-```
+`maxSpendPerTx` — maximum spend per transaction, denominated in a specific token. The policy engine converts action amounts to USD using token prices at evaluation time.
 
-Rules are evaluated **in order**. The first rule whose `match` and `condition` both pass determines the outcome. If no rule matches, the policy `defaults.effect` is used.
+`allowedContracts` — explicit allowlist of contract addresses per chain. Swaps and contract calls to unlisted addresses are rejected.
 
-<Callout type="warning">
-  Always set `defaults.effect: "deny"` for production agents. Allowing by default creates an open door for action types you forgot to enumerate.
-</Callout>
+`requireSimulation` — when true, the pipeline rejects any action whose simulation could not be completed.
+
+`gasBufferMultiplier` — minimum gas buffer multiplier. The pipeline rejects actions whose gas estimate does not include at least this buffer.
+
+`humanApprovalThreshold` — actions above this amount require a human to approve before execution. Cancel-on-timeout is the hard default.
+
+`temporalRules` — optional array of `TemporalRule` objects evaluated after static checks. Used to detect behavioral patterns like spend velocity, failure rate, and approval floods over sliding time windows.
 
 ## Action Types
 
-txfence normalizes every chain operation into one of five action types:
+txfence normalizes every chain operation into one of three action kinds:
 
-| Action | Description |
+| Kind | Description |
 |---|---|
 | `transfer` | Send native tokens or fungible assets to an address |
-| `approve` | Grant a spender allowance over an asset |
-| `call` | Invoke an arbitrary contract function |
-| `deploy` | Deploy a new contract |
-| `sign` | Sign a message or typed data (EIP-712) |
-
-The raw chain transaction is decoded into an `ActionIntent` before policy evaluation:
+| `swap` | Exchange tokens via a DEX or aggregator |
+| `contract_call` | Invoke an arbitrary contract function |
 
 ```typescript
-interface ActionIntent {
-  type: "transfer" | "approve" | "call" | "deploy" | "sign";
-  chain: ChainId;
-  from: Address;
-  to?: Address;
-  value?: bigint;       // native token amount in base units
-  asset?: Address;      // ERC-20 / SPL token address
-  data?: Hex;           // calldata (call/deploy)
-  functionSig?: string; // decoded function signature
-  args?: unknown[];     // decoded function arguments
+import type { Action } from '@txfence/core'
+
+const action: Action = {
+  kind:  'transfer',
+  chain: 'ethereum',
+  token: { token: 'ETH', amount: 100000000000000000n, decimals: 18 },
+  to:    '0xRECIPIENT',
 }
 ```
 
+For swaps, the action includes `maxSlippage` in basis points. For contract calls, the action includes pre-encoded `calldata` — the builder encodes, txfence handles policy, simulation, and execution.
+
 ## The Evaluation Pipeline
 
-Every proposed action passes through five ordered stages:
+Every action passes through a fixed sequence of stages. No stage can be skipped.
 
-### 1. Parse
+### 1. Policy check
 
-The raw action (RLP-encoded transaction, Solana instruction, Cosmos `MsgSend`, etc.) is decoded into a normalized `ActionIntent`. Chain adapters provide this parsing logic.
+Six checks run synchronously against the action and policy:
 
-### 2. Simulate
+- **Chain allowed** — is the action's chain in `policy.chains`?
+- **Contract allowlist** — for swaps and contract calls, is the target on `allowedContracts`?
+- **Spend cap** — does the action's value exceed `maxSpendPerTx`?
+- **Slippage declared** — for swaps, is `maxSlippage > 0`?
+- **Simulation required** — if `requireSimulation: true`, is simulation configured?
+- **Gas buffer** — does the gas estimate include at least `gasBufferMultiplier`?
 
-The action is executed against a **forked snapshot** of current chain state. This catches reverts, insufficient balances, and reentrancy scenarios without spending gas or mutating state.
+The first failing check short-circuits evaluation and returns a `PolicyRejectionReason`.
 
-```typescript
-const simulation = await fence.simulate(action);
-// simulation.success, simulation.gasEstimate, simulation.stateChanges
-```
+### 2. Temporal rules (optional)
 
-### 3. Evaluate
+If `policy.temporalRules` is set and an `EventStore` is provided, temporal predicates are evaluated after static checks. Six predicate kinds are supported: `simulation_failure_rate`, `contract_call_frequency`, `success_drought`, `spend_velocity`, `consecutive_failures`, and `approval_flood`.
 
-Policy rules are tested in order against the `ActionIntent` and the simulation result. Conditions can reference:
+### 3. Simulation
 
-- Action fields (`value`, `to`, `functionSig`, …)
-- Simulation outputs (`stateChanges`, `gasEstimate`)
-- Context variables (`$allowlist`, `$rateLimit`, …)
+The action is executed against current chain state via `eth_call` or Tenderly deep simulation. This catches reverts, insufficient balances, and gas estimation failures without spending gas or mutating state.
 
-The first matching rule's effect is applied. Unmatched actions fall through to `defaults.effect`.
+Simulation results include `gas`, `coverageLevel` (`basic` or `deep`), `wouldRevert`, and `caveats`. The `state_may_diverge` caveat is always present — simulation is a snapshot, execution happens later.
 
-### 4. Audit
+### 4. Human approval (optional)
 
-A structured log entry is written **regardless of outcome** — pass or fail. Log entries include:
+If the action's value exceeds `humanApprovalThreshold`, the pipeline dispatches a webhook and waits up to `humanApprovalTimeoutMs` for a human decision. The webhook payload is signed with HMAC-SHA256. Cancel-on-timeout is the hard default — approval timeout never defaults to execution.
 
-- The full `ActionIntent`
-- Every rule that was evaluated and its outcome
-- The final decision (`allowed: true/false`)
-- A SHA-256 hash of the previous entry (chain linking)
+### 5. Execution
 
-### 5. Execute
+If all checks pass and approval is granted (or not required), the signed transaction is broadcast to the chain. The receipt is stored, the audit log is updated, and the monitor reconciles the on-chain result.
 
-If and only if `allowed === true`, the signed transaction is submitted to the chain via the adapter's RPC connection. The transaction hash is appended to the audit log entry.
+## createAgent
 
-## Context Variables
-
-Policies can reference dynamic values via **context variables** prefixed with `$`. You supply context when creating the fence:
+`createAgent` is the primary entry point. It wires policy, adapters, RPC URLs, and an executor into a single agent instance with a `submit()` method.
 
 ```typescript
-const fence = createFence({
-  adapter,
-  policy,
-  context: {
-    allowlist: ["0xAbc...", "0xDef..."],
-    dailyLimit: 5n * 10n ** 18n,  // 5 ETH
-  },
-});
+import { createAgent } from '@txfence/core'
+import { simulateEvmAction, executeEvmAction, privateKeySigner } from '@txfence/evm'
+
+const signer = privateKeySigner(process.env.PRIVATE_KEY as `0x${string}`)
+
+const agent = createAgent(
+  { chains: ['ethereum'], policies: policy, signer },
+  { ethereum: { simulate: simulateEvmAction } },
+  { ethereum: 'https://ethereum.publicnode.com' },
+  (action, chainId, rpcUrl, evaluation, simulation) =>
+    executeEvmAction(action, chainId, rpcUrl, signer, evaluation, simulation)
+)
+
+const result = await agent.submit({ action, policy })
 ```
 
-Inside a rule condition, reference them as `"$allowlist"` or `"$dailyLimit"`. The policy engine resolves them at evaluation time, so you can update context between calls without redefining the policy.
+`result.status` is one of: `success`, `policy_rejected`, `simulation_failed`, `approval_timeout`, `execution_failed`, or `simulation_stale`.
 
 ## Dry Run Mode
 
-Pass `{ dryRun: true }` to `fence.evaluate()` to run the full pipeline — including simulation and policy evaluation — without writing to the audit log or executing on-chain:
+Call `agent.dryRun(input)` to run the full pipeline — including simulation and policy evaluation — without executing on-chain. Returns a `DryRunResult` with `wouldProceed`, `blockers`, and `approvalRequired`.
 
 ```typescript
-const result = await fence.evaluate(action, { dryRun: true });
-console.log(result.allowed, result.violations);
+const dry = await agent.dryRun({ action, policy })
+console.log(dry.wouldProceed, dry.blockers)
 ```
 
-This is useful for testing policies without side effects.
+<Callout type="info">
+  `txfence submit` defaults to dry-run mode in the CLI. Pass `--execute` to broadcast a real transaction.
+</Callout>
+
+## Composite Policies
+
+For complex authorization logic, wrap flat policies in an AND/OR tree using `policyAnd`, `policyOr`, and `policyLeaf`:
+
+```typescript
+import { policyAnd, policyOr, policyLeaf } from '@txfence/core'
+
+const treasuryPolicy = policyAnd([
+  policyOr([
+    policyLeaf(smallSpendPolicy, 'small-spend'),
+    policyLeaf(largeSpendPolicy, 'large-spend'),
+  ], 'spend-tier'),
+  policyLeaf(contractAllowlistPolicy, 'allowlist'),
+], 'treasury')
+```
+
+Pass `policyNode` to `createAgent` instead of a flat policy to use composite evaluation.

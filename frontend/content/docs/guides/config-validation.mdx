@@ -1,0 +1,80 @@
+---
+title: Config Validation
+description: Domain-aware policy configuration validation — catch misconfigured policies before they cause runtime failures.
+---
+
+import { Callout } from "nextra/components";
+
+# Config Validation
+
+`validateConfig` checks a policy for domain-specific errors and warnings before deployment. It catches mistakes that TypeScript cannot — like USDC configured with 18 decimals, or an approval threshold below the per-transaction cap.
+
+## validateConfig
+
+```typescript
+import { validateConfig } from '@txfence/core'
+
+const result = validateConfig(policy)
+
+if (!result.valid) {
+  console.error('Policy has errors:', result.errors)
+  process.exit(1)
+}
+
+if (result.warnings.length > 0) {
+  console.warn('Policy warnings:', result.warnings)
+}
+```
+
+## Errors
+
+Errors indicate the policy will cause runtime failures. Fix before deploying.
+
+| Check | Problem |
+|---|---|
+| `chains` is empty | No actions can ever pass |
+| `gasBufferMultiplier < 1.0` | Every simulated transaction fails the gas check |
+| `humanApprovalTimeoutMs < 1000` | Approval windows under 1 second are unusable |
+| `maxSpendPerTx.decimals === 0` | Almost certainly wrong |
+| Mismatched decimals on threshold vs cap | Threshold comparisons will be incorrect |
+
+## Warnings
+
+Warnings indicate unexpected behavior. Review before deploying.
+
+| Check | Problem |
+|---|---|
+| USDC/USDT with 18 decimals | Authorizes 1,000,000,000,000× the intended amount |
+| ETH/WBTC with 6 decimals | Decimals mismatch for known tokens |
+| `approvalThreshold < maxSpendPerTx` | Every transaction triggers approval |
+| `gasBufferMultiplier > 3.0` | Unusually high buffer |
+| Empty `allowedContracts` with `requireSimulation: false` | Very permissive policy |
+| Expired `allowedContracts` entries | Will be rejected with `contract_entry_expired` |
+
+## ConfigValidationResult
+
+```typescript
+interface ConfigValidationResult {
+  valid:    boolean
+  errors:   ConfigError[]
+  warnings: ConfigWarning[]
+}
+
+interface ConfigWarning {
+  field:    string
+  message:  string
+  severity: 'high' | 'medium' | 'low'
+}
+```
+
+## CLI integration
+
+`txfence check-policy` runs `validateConfig` automatically before evaluating the action. Exits 1 on errors, prints warnings and continues.
+
+## MCP tool
+
+`txfence_validate_config` — AI assistants can validate policies before deploying.
+
+<Callout type="warning">
+  Always run `validateConfig` in your deployment pipeline. A misconfigured decimal count can authorize orders of magnitude more spend than intended.
+</Callout>

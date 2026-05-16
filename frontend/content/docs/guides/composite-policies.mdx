@@ -1,0 +1,82 @@
+---
+title: Composite Policies
+description: AND/OR policy trees for complex multi-tier authorization logic.
+---
+
+# Composite Policies
+
+Composite policies let you combine flat `Policy` objects into AND/OR trees. Use them when a single flat policy cannot express your authorization logic — for example, a treasury that allows small transfers without approval OR large transfers with approval, but always requires an allowlist check.
+
+## Primitives
+
+```typescript
+import { policyAnd, policyOr, policyLeaf } from '@txfence/core'
+```
+
+`policyLeaf(policy, label?)` — wraps a flat policy.
+`policyAnd(children, label?)` — all children must pass.
+`policyOr(children, label?)` — at least one child must pass.
+
+## Example — tiered treasury
+
+```typescript
+const smallSpend = { ...basePolicy, maxSpendPerTx: { token: 'USDC', amount: 1000n, decimals: 6 } }
+const largeSpend = { ...basePolicy, maxSpendPerTx: { token: 'USDC', amount: 50000n, decimals: 6 }, humanApprovalThreshold: { token: 'USDC', amount: 10000n, decimals: 6 } }
+const allowlist  = { ...basePolicy, allowedContracts: [...] }
+
+const treasuryPolicy = policyAnd([
+  policyOr([
+    policyLeaf(smallSpend, 'small-spend'),
+    policyLeaf(largeSpend, 'large-spend'),
+  ], 'spend-tier'),
+  policyLeaf(allowlist, 'allowlist'),
+], 'treasury')
+```
+
+An action passes if it satisfies either `smallSpend` or `largeSpend`, AND the `allowlist` check.
+
+## Wiring into createAgent
+
+Pass `policyNode` instead of a flat policy:
+
+```typescript
+const agent = createAgent(
+  { chains: ['ethereum'], signer },
+  adapters,
+  rpcUrls,
+  executor,
+  capLockProvider,
+  receiptStore,
+  approvalProvider,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  treasuryPolicy  // policyNode as 12th parameter
+)
+```
+
+## PolicyNodeEvaluation
+
+The evaluation result preserves which nodes passed and why:
+
+```typescript
+interface PolicyNodeEvaluation {
+  passed:               boolean
+  firstRejectionReason: PolicyRejectionReason | undefined
+  node:                 PolicyNode
+  children?:            PolicyNodeEvaluation[]
+}
+```
+
+`firstRejectionReason` propagates from the deepest failing leaf to the root for backward-compatible error reporting.
+
+## AND semantics
+
+- Empty `policyAnd([])` — vacuously true (passes).
+- All children must pass. First failure short-circuits.
+
+## OR semantics
+
+- Empty `policyOr([])` — vacuously false (fails).
+- First passing child short-circuits.

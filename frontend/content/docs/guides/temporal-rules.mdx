@@ -1,0 +1,141 @@
+---
+title: Temporal Rules
+description: Stateful behavioral rules over sliding windows — detect spend velocity, failure patterns, and approval floods.
+---
+
+import { Callout } from "nextra/components";
+
+# Temporal Rules
+
+Temporal rules evaluate behavioral patterns over sliding time windows of pipeline events. Where static policy checks evaluate each action in isolation, temporal rules detect patterns across many actions — a sudden spike in simulation failures, a spend velocity exceeding a threshold, or a flood of approval requests.
+
+## Setup
+
+```typescript
+import { createAgent, createMemoryEventStore } from '@txfence/core'
+
+const eventStore = createMemoryEventStore({
+  maxWindowMs: 86_400_000,  // 24 hours (default)
+  maxEvents:   10_000,      // (default)
+})
+
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  undefined, undefined, undefined, undefined,
+  undefined, undefined, undefined, undefined,
+  undefined, undefined, undefined,
+  eventStore,        // 16th parameter
+  'agent-0x123',     // 17th parameter — agentId for scoped predicates
+)
+```
+
+## Policy with temporal rules
+
+```typescript
+import type { Policy } from '@txfence/core'
+
+const policy: Policy = {
+  // ...static fields...
+  temporalRules: [
+    {
+      predicate: {
+        kind:      'simulation_failure_rate',
+        windowMs:  3_600_000,  // 1 hour
+        threshold: 3,
+      },
+      consequence: { kind: 'require_approval' },
+      label: 'sim-failure-guard',
+    },
+    {
+      predicate: {
+        kind:      'spend_velocity',
+        windowMs:  1_800_000,  // 30 minutes
+        maxAmount: 50_000n,
+        token:     'USDC',
+      },
+      consequence: { kind: 'reject' },
+      label: 'velocity-limit',
+    },
+  ],
+}
+```
+
+Temporal rules are evaluated after static policy checks and before simulation.
+
+## Six predicate kinds
+
+### simulation_failure_rate
+
+Triggers when simulation failure count meets threshold in window. Agent-scoped when `agentId` is provided.
+
+```typescript
+{ kind: 'simulation_failure_rate', windowMs: 3_600_000, threshold: 3 }
+```
+
+### contract_call_frequency
+
+Triggers when a specific contract is called too many times in window.
+
+```typescript
+{ kind: 'contract_call_frequency', windowMs: 300_000, contractAddress: '0x...', threshold: 10 }
+```
+
+### success_drought
+
+Triggers when success count falls below threshold in window — indicates a stalled agent.
+
+```typescript
+{ kind: 'success_drought', windowMs: 3_600_000, threshold: 1 }
+```
+
+### spend_velocity
+
+Triggers when cumulative spend (historical + current action) exceeds limit in window.
+
+```typescript
+{ kind: 'spend_velocity', windowMs: 1_800_000, maxAmount: 50_000n, token: 'USDC' }
+```
+
+### consecutive_failures
+
+Triggers when the last N pipeline events are all non-success, regardless of time.
+
+```typescript
+{ kind: 'consecutive_failures', count: 5 }
+```
+
+### approval_flood
+
+Triggers when approval timeout count meets threshold in window.
+
+```typescript
+{ kind: 'approval_flood', windowMs: 3_600_000, threshold: 3 }
+```
+
+## TemporalConsequence
+
+Three consequence kinds:
+
+```typescript
+type TemporalConsequence =
+  | { kind: 'require_approval' }
+  | { kind: 'reject' }
+  | { kind: 'flag_for_review' }
+```
+
+## EventStore interface
+
+```typescript
+interface EventStore {
+  record(event: PipelineEvent): Promise<void>
+  query(filter: EventFilter): Promise<PipelineEvent[]>
+  prune(beforeMs: number): Promise<void>
+  recent(windowMs: number, agentId?: string): Promise<PipelineEvent[]>
+}
+```
+
+`recordPipelineEvent` is called automatically after each pipeline run — it swallows errors so event recording never crashes the pipeline.
+
+<Callout type="info">
+  The `temporal_rule_triggered` rejection reason appears in audit log entries and policy evaluations when a temporal rule fires.
+</Callout>

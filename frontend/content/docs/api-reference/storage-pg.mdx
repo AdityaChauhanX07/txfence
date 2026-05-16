@@ -1,0 +1,48 @@
+---
+title: "@txfence/storage-pg"
+description: PostgreSQL receipt storage with idempotent upserts and indexed queries.
+---
+
+# @txfence/storage-pg
+
+PostgreSQL `ReceiptStore` implementation for production multi-process deployments.
+
+## Installation
+
+```bash
+npm install @txfence/storage-pg pg
+```
+
+## Setup
+
+```typescript
+import { createPgReceiptStore, initSchema } from '@txfence/storage-pg'
+import { Pool } from 'pg'
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+await initSchema(pool)
+
+const receiptStore = createPgReceiptStore(pool)
+```
+
+`initSchema` is idempotent — safe to call on every startup.
+
+## Options
+
+```typescript
+createPgReceiptStore(pool, { tableName: 'txfence_receipts' })
+```
+
+`tableName` defaults to `txfence_receipts`.
+
+## Querying
+
+```typescript
+const receipts = await receiptStore.list({ chain: 'ethereum', from: 21000000 })
+```
+
+Indexes on `chain` and `confirmed_at_block` for efficient filtering.
+
+## Notes
+
+txfence does not manage the connection lifecycle — inject your own `pg.Pool`. Upserts use `ON CONFLICT DO UPDATE` for idempotency. Full bigint serialization via string conversion for JSONB storage.

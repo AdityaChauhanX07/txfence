@@ -1,0 +1,104 @@
+---
+title: Agent Health & Shutdown
+description: Graceful shutdown with in-flight drain, health checks for Kubernetes probes, and cap lock inspection.
+---
+
+# Agent Health & Shutdown
+
+Production agents need graceful shutdown — draining in-flight submissions before stopping — and health endpoints for load balancers and Kubernetes probes. txfence builds both into the agent interface.
+
+## health()
+
+Returns a snapshot of agent state:
+
+```typescript
+const health = agent.health()
+
+console.log(health.status)    // 'healthy' | 'shutting_down'
+console.log(health.inFlight)  // number of submissions currently in progress
+console.log(health.uptime)    // ms since agent creation
+```
+
+Suitable for Kubernetes liveness probes:
+
+```typescript
+app.get('/healthz', (req, res) => {
+  const health = agent.health()
+  if (health.status === 'healthy') {
+    res.json(health)
+  } else {
+    res.status(503).json(health)
+  }
+})
+```
+
+## shutdown()
+
+Sets the shutting-down flag immediately, then polls every 50ms until in-flight submissions complete or the timeout expires:
+
+```typescript
+const result = await agent.shutdown(30_000)  // 30 second timeout
+
+console.log(result.completed)        // submissions that finished cleanly
+console.log(result.abandoned)        // submissions that exceeded timeout
+console.log(result.capLocksReleased) // whether cap locks were inspected
+```
+
+`submit()` throws when called after `shutdown()` — no new submissions accepted during drain.
+
+## AgentShutdownResult
+
+```typescript
+interface AgentShutdownResult {
+  completed:        number
+  abandoned:        number
+  capLocksReleased: boolean
+}
+```
+
+Submissions that exceed the timeout are counted as `abandoned`. They may or may not have executed on-chain — check the monitor for unrecorded transactions.
+
+## isShuttingDown()
+
+```typescript
+if (agent.isShuttingDown()) {
+  console.log('Agent is draining — no new submissions accepted')
+}
+```
+
+## Cap lock inspection on shutdown
+
+Pass `capLockConfigs` to `createAgent` to enable cap lock inspection during shutdown:
+
+```typescript
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  capLockProvider,
+  receiptStore,
+  approvalProvider,
+  notificationProvider,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  undefined,
+  eventStore,
+  agentId,
+  capLockConfigs,  // 18th parameter
+)
+```
+
+`shutdown()` inspects cap locks via `capLockProvider.inspect()` and logs a warning if active locks remain after drain. Individual lock release requires lock IDs held inside the pipeline — documented as a known limitation.
+
+## SIGTERM handling
+
+```typescript
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received — draining agent')
+  const result = await agent.shutdown(30_000)
+  console.log(`Shutdown complete: ${result.completed} completed, ${result.abandoned} abandoned`)
+  process.exit(0)
+})
+```

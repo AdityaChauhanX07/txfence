@@ -1,0 +1,131 @@
+---
+title: Fork Simulation
+description: Multi-step what-if analysis using Tenderly fork API — simulate an entire intent before executing.
+---
+
+import { Callout } from "nextra/components";
+
+# Fork Simulation
+
+Fork simulation runs a multi-step intent against a live fork of current chain state using the Tenderly Fork API. Each step is simulated sequentially on the same fork — state changes from step N are visible to step N+1. Use it to validate complex intents before committing to execution.
+
+## Requirements
+
+Tenderly account with fork API access. Set environment variables:
+
+```bash
+TENDERLY_ACCESS_KEY=...
+TENDERLY_ACCOUNT_SLUG=your-account
+TENDERLY_PROJECT_SLUG=your-project
+```
+
+## simulateIntentOnFork
+
+```typescript
+import { simulateIntentOnFork } from '@txfence/evm'
+
+const result = await simulateIntentOnFork(intent, {
+  accessKey:    process.env.TENDERLY_ACCESS_KEY!,
+  accountSlug:  process.env.TENDERLY_ACCOUNT_SLUG!,
+  projectSlug:  process.env.TENDERLY_PROJECT_SLUG!,
+}, 'ethereum', rpcUrl)
+
+console.log(result.wouldAllSucceed)
+console.log(result.failingStepId)   // first step that would revert, if any
+console.log(result.finalPosition)   // net position changes across all steps
+```
+
+The fork is created, all steps are simulated, and the fork is deleted in a `finally` block — guaranteed cleanup even on error.
+
+## ForkSimulationResult
+
+```typescript
+interface ForkSimulationResult {
+  forkId:          string
+  forkedAtBlock:   bigint
+  steps:           StepForkSimulationResult[]
+  finalPosition:   StateChange[]
+  wouldAllSucceed: boolean
+  failingStepId:   string | null
+  simulatedAt:     number
+}
+```
+
+## StepForkSimulationResult
+
+```typescript
+interface StepForkSimulationResult {
+  stepId:             string
+  stateChanges:       StateChange[]
+  cumulativePosition: StateChange[]
+  wouldRevert:        boolean
+  revertReason?:      string
+}
+```
+
+`cumulativePosition` tracks the net position delta from the start of the intent through this step — useful for understanding intermediate exposure.
+
+## StateChange
+
+```typescript
+interface StateChange {
+  address:       string
+  token?:        string   // 'native' for ETH balance diffs
+  balanceBefore: bigint
+  balanceAfter:  bigint
+  delta:         bigint
+}
+```
+
+## Low-level fork client
+
+For direct fork control:
+
+```typescript
+import { createFork, simulateOnFork, deleteFork } from '@txfence/evm'
+
+const { forkId, forkedAtBlock } = await createFork(tenderlyConfig, 'ethereum')
+
+try {
+  const stepResult = await simulateOnFork(
+    tenderlyConfig,
+    forkId,
+    txParams,
+    'ethereum',
+    forkedAtBlock,
+  )
+} finally {
+  await deleteFork(tenderlyConfig, forkId)  // 404 silently accepted
+}
+```
+
+## Fork at a specific block
+
+```typescript
+const result = await simulateIntentOnFork(intent, tenderlyConfig, 'ethereum', rpcUrl, {
+  blockNumber: 21_000_000n,
+})
+```
+
+## CLI
+
+```bash
+txfence intent fork-simulate \
+  --intent ./intent.json \
+  --from 0xYOUR_AGENT_ADDRESS \
+  --chain ethereum \
+  --block 21000000
+
+# JSON output
+txfence intent fork-simulate --intent ./intent.json --from 0x... --chain ethereum --json
+```
+
+Exits 0 if all steps would succeed, 1 if any would fail.
+
+## MCP tool
+
+`txfence_fork_simulate_intent` — AI assistants can validate intents before execution. Returns structured JSON with per-step results and final position.
+
+<Callout type="warning">
+  Fork simulation costs Tenderly credits. Use a dedicated Tenderly project for simulation workloads. EVM only — Solana fork simulation via account overrides is planned for v2.
+</Callout>

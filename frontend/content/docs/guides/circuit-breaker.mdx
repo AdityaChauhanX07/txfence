@@ -1,0 +1,82 @@
+---
+title: Circuit Breaker
+description: RPC fault tolerance — automatically stop simulation calls when the RPC is failing.
+---
+
+# Circuit Breaker
+
+The circuit breaker prevents cascading RPC failures from overwhelming your agent. When simulation failures exceed a threshold, the breaker opens and blocks further simulation calls — returning immediate failures instead of waiting for timeouts.
+
+## createCircuitBreaker
+
+```typescript
+import { createCircuitBreaker } from '@txfence/core'
+
+const breaker = createCircuitBreaker({
+  failureThreshold: 5,      // consecutive failures before opening
+  successThreshold: 2,      // consecutive successes in half-open before closing
+  timeoutMs:        60000,  // ms before transitioning open → half-open
+  onStateChange: (from, to) => {
+    console.log(`Circuit breaker: ${from} → ${to}`)
+  },
+})
+```
+
+All config fields are optional — defaults shown above.
+
+## Three states
+
+**closed** — normal operation. Simulation calls pass through to the RPC.
+
+**open** — breaker is tripped. Simulation returns immediately with `success: false, coverageLevel: 'none'` — no RPC call made. After `timeoutMs`, transitions to half-open.
+
+**half-open** — probing. The next simulation call goes through to the RPC. If it succeeds, the success counter increments. After `successThreshold` consecutive successes, transitions back to closed. Any failure sends it back to open.
+
+## Wrapping an adapter
+
+```typescript
+import { wrapAdapterWithCircuitBreaker } from '@txfence/core'
+
+const protectedAdapter = wrapAdapterWithCircuitBreaker(
+  { simulate: simulateEvmAction },
+  breaker,
+  'ethereum'
+)
+
+const agent = createAgent(
+  config,
+  { ethereum: protectedAdapter },
+  rpcUrls,
+  executor
+)
+```
+
+The wrapped adapter is a drop-in replacement for the original — same interface, same usage.
+
+## Failure counting
+
+What counts as a failure: the adapter throws an exception.
+
+What does NOT count as a failure: simulation succeeds but `wouldRevert: true`. The RPC worked — the transaction would revert, which is useful information.
+
+## Manual reset
+
+```typescript
+breaker.reset()
+```
+
+For operational tooling — resets the breaker to closed state without waiting for `timeoutMs`.
+
+## Design
+
+The circuit breaker is composable — wrap your adapter, not buried in the pipeline. This means you can apply different breakers to different chains, or share a breaker across multiple agents.
+
+```typescript
+const ethereumBreaker = createCircuitBreaker({ failureThreshold: 3 })
+const arbitrumBreaker = createCircuitBreaker({ failureThreshold: 10 })
+
+const agent = createAgent(config, {
+  ethereum: wrapAdapterWithCircuitBreaker(evmAdapter, ethereumBreaker, 'ethereum'),
+  arbitrum: wrapAdapterWithCircuitBreaker(evmAdapter, arbitrumBreaker, 'arbitrum'),
+}, rpcUrls, executor)
+```

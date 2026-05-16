@@ -1,0 +1,71 @@
+---
+title: "@txfence/audit"
+description: Append-only audit log for compliance teams — captures every policy decision, rejection, and execution outcome.
+---
+
+# @txfence/audit
+
+Append-only audit log that records every pipeline decision regardless of outcome. Unlike receipt storage which only records successful transactions, the audit log records policy rejections, simulation failures, approval decisions, and execution outcomes.
+
+## Installation
+
+```bash
+npm install @txfence/audit
+```
+
+## createMemoryAuditLog
+
+In-memory implementation for development and testing.
+
+```typescript
+import { createMemoryAuditLog } from '@txfence/audit'
+
+const auditLog = createMemoryAuditLog()
+```
+
+## createFileAuditLog
+
+Append-only NDJSON file backend. One entry per line, never rewrites existing entries.
+
+```typescript
+import { createFileAuditLog } from '@txfence/audit'
+
+const auditLog = createFileAuditLog('./audit.jsonl')
+```
+
+## Querying
+
+```typescript
+const rejected = await auditLog.query({ status: 'policy_rejected' })
+const swaps = await auditLog.query({
+  actionKind: 'swap',
+  from: Date.now() - 86400000,
+})
+```
+
+`AuditFilter` supports: `chain`, `from`, `to` (timestamps), `status`, `actionKind`.
+
+## AuditEntry
+
+Each entry captures: `action`, `policySnapshot` (immutable clone at decision time), `evaluation`, `simulationResult`, `approvalRequest`, `approvalDecision`, and `outcome`.
+
+`AuditOutcome` covers: `success`, `policy_rejected`, `simulation_failed`, `approval_timeout`, `execution_failed`, `dry_run`.
+
+## Wiring into the pipeline
+
+Pass as the optional `auditLog` parameter to `createAgent` or `runPipeline`. Every pipeline outcome is recorded automatically.
+
+```typescript
+import { createAgent } from '@txfence/core'
+import { createFileAuditLog } from '@txfence/audit'
+
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  undefined, undefined, undefined, undefined,
+  receiptStore, createFileAuditLog('./audit.jsonl')
+)
+```
+
+## Known limitation
+
+No tamper evidence in v1. Use a write-once storage backend (e.g. S3 with object lock) for strict tamper-evidence requirements. For cryptographic tamper evidence, see `@txfence/provenance`.

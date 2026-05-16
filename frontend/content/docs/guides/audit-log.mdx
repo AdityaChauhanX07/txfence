@@ -1,0 +1,98 @@
+---
+title: Audit Log
+description: Append-only audit log for compliance teams — every policy decision, rejection, and execution outcome recorded.
+---
+
+import { Callout } from "nextra/components";
+
+# Audit Log
+
+The audit log records every pipeline decision regardless of outcome. Unlike receipt storage which only records successful transactions, the audit log captures policy rejections, simulation failures, approval decisions, and execution outcomes — giving compliance teams a complete trail of agent activity.
+
+## Setup
+
+```typescript
+import { createAgent } from '@txfence/core'
+import { createFileAuditLog } from '@txfence/audit'
+
+const auditLog = createFileAuditLog('./audit.jsonl')
+
+const agent = createAgent(
+  config, adapters, rpcUrls, executor,
+  undefined, undefined, undefined, undefined,
+  receiptStore, auditLog
+)
+```
+
+Every pipeline run automatically records to the audit log — no additional code required.
+
+## Backends
+
+`createMemoryAuditLog()` — in-memory, for development and testing.
+
+`createFileAuditLog(path)` — append-only NDJSON file. One entry per line, never rewrites. Production-ready for single-process deployments.
+
+## Querying
+
+```typescript
+const rejected = await auditLog.query({ status: 'policy_rejected' })
+
+const recentSwaps = await auditLog.query({
+  actionKind: 'swap',
+  from: Date.now() - 86_400_000,
+  to:   Date.now(),
+})
+
+const byChain = await auditLog.query({ chain: 'ethereum' })
+```
+
+`AuditFilter` fields: `chain`, `from`, `to` (ms timestamps), `status`, `actionKind`.
+
+## AuditEntry structure
+
+Each entry captures:
+
+- `action` — the full action that was submitted
+- `policySnapshot` — immutable deep clone of the policy at decision time
+- `policyVersionId` — stable SHA-256 ID of the policy (when using policy versioning)
+- `evaluation` — which checks ran and their results
+- `simulationResult` — gas estimate, coverage, caveats
+- `approvalRequest` / `approvalDecision` — webhook dispatch and human decision
+- `outcome` — final result
+
+## AuditOutcome
+
+```typescript
+type AuditOutcome =
+  | { status: 'success';           receipt: SuccessReceipt }
+  | { status: 'policy_rejected';   rejectionReason: PolicyRejectionReason }
+  | { status: 'simulation_failed'; caveats: string[] }
+  | { status: 'approval_timeout' }
+  | { status: 'execution_failed';  reason: ExecutionFailureReason }
+  | { status: 'dry_run';           stoppedAt: 'policy' | 'simulation' | 'approval' }
+```
+
+## Policy snapshot immutability
+
+`clonePolicy()` is called inside `record()` — the policy snapshot in each entry is immutable even if you mutate the policy object after recording. Historical entries always reflect the policy that was actually in effect.
+
+## Replay
+
+Use `replayAuditLog` from `@txfence/core` to test a proposed policy against historical decisions:
+
+```typescript
+import { replayAuditLog } from '@txfence/core'
+
+const result = await replayAuditLog(auditLog, proposedPolicy, {
+  onlyChanged: true,
+  actionKind:  'swap',
+})
+
+console.log(result.summary.newlyRejected)
+```
+
+See the [Replay & Backtesting](/docs/guides/replay) guide for details.
+
+<Callout type="warning">
+  No tamper evidence in the file backend. Use a write-once storage backend (S3 with object lock) for strict compliance requirements. For cryptographic tamper evidence, see [Provenance Chains](/docs/guides/provenance-chains).
+</Callout>

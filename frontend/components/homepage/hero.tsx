@@ -338,7 +338,7 @@ export function Hero() {
               color: "var(--color-text-tertiary)",
             }}
           >
-            v0.19.0 · 252 tests passing · MIT · CI green
+            v0.46.0 · 600+ tests passing · MIT · CI green
           </p>
         </div>
       </div>

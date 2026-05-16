@@ -1,0 +1,62 @@
+---
+title: "@txfence/monitor"
+description: On-chain reconciliation monitor — detects unrecorded transactions and chain reorganizations.
+---
+
+# @txfence/monitor
+
+Watches known agent addresses by scanning blocks. If a transaction appears on-chain from an agent address that txfence did not record, it fires `onUnrecordedTransaction`. Detects chain reorganizations via reverse reconciliation.
+
+## Installation
+
+```bash
+npm install @txfence/monitor
+```
+
+## createMonitor
+
+```typescript
+import { createMonitor, createFileCheckpointStore } from '@txfence/monitor'
+import { createFileReceiptStore } from '@txfence/core'
+
+const monitor = createMonitor({
+  chains: ['ethereum'],
+  agentAddresses: {
+    ethereum: ['0xYOUR_AGENT_ADDRESS'],
+  },
+  rpcUrls: {
+    ethereum: process.env.ETHEREUM_RPC_URL!,
+  },
+  receiptStore: createFileReceiptStore('./receipts.jsonl'),
+  checkpointStore: createFileCheckpointStore('./monitor-checkpoint.json'),
+  pollIntervalMs: 12000,
+  maxBlocksPerPoll: 5,
+  gracePeriodMs: 30000,
+  reconcileIntervalMs: 300000,
+  onUnrecordedTransaction: (event) => {
+    if (event.severity === 'critical') {
+      console.error('CRITICAL: unrecorded transaction', event)
+    }
+  },
+  onReorgDetected: (event) => {
+    console.warn('chain reorganization detected', event)
+  },
+})
+
+await monitor.start()
+```
+
+## Severity levels
+
+`warning` — fires immediately when an unrecorded transaction is detected.
+`critical` — fires after `gracePeriodMs` if the transaction still hasn't appeared in the receipt store. Indicates possible signing key compromise.
+
+## CheckpointStore
+
+Persists last checked block across process restarts. Two implementations: `createMemoryCheckpointStore` for testing, `createFileCheckpointStore(path)` for production.
+
+## Important
+
+Block scanning is RPC-intensive. Use a dedicated RPC endpoint (Alchemy, Infura) rather than a public node in production. Public nodes will rate-limit under continuous polling.
+
+EVM only in v1. Solana and Cosmos monitoring planned.

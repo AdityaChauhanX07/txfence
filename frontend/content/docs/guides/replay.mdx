@@ -1,0 +1,102 @@
+---
+title: Replay & Backtesting
+description: Test a proposed policy against historical audit log data before deploying.
+---
+
+# Replay & Backtesting
+
+`replayAuditLog` feeds historical audit log entries through a new policy and classifies what changed. Use it to understand the blast radius of a policy change before deploying — which previously-allowed actions would now be rejected, and which previously-rejected actions would now be allowed.
+
+## Basic usage
+
+```typescript
+import { replayAuditLog } from '@txfence/core'
+import { createFileAuditLog } from '@txfence/audit'
+
+const auditLog = createFileAuditLog('./audit.jsonl')
+
+const result = await replayAuditLog(auditLog, proposedPolicy)
+
+console.log(result.summary)
+// {
+//   total:                    1240,
+//   changed:                  18,
+//   newlyAllowed:             3,
+//   newlyRejected:            12,
+//   rejectionReasonChanged:   3,
+//   unchanged:                1222,
+//   skipped:                  0,
+// }
+```
+
+## ReplayEntry
+
+Each changed entry includes:
+
+```typescript
+interface ReplayEntry {
+  originalEvaluation: PolicyEvaluation
+  replayEvaluation:   PolicyEvaluation
+  changed:            boolean
+  direction:          ReplayDirection
+  changedChecks:      ChangedCheck[]
+}
+
+type ReplayDirection =
+  | 'newly_allowed'
+  | 'newly_rejected'
+  | 'rejection_reason_changed'
+```
+
+`rejection_reason_changed` catches the case where both policies reject but for different reasons — useful when debugging policy interactions.
+
+## Filtering
+
+```typescript
+const result = await replayAuditLog(auditLog, proposedPolicy, {
+  from:        Date.now() - 7 * 86_400_000,  // last 7 days
+  to:          Date.now(),
+  actionKind:  'swap',
+  chain:       'ethereum',
+  onlyChanged: true,                          // suppress unchanged entries
+})
+```
+
+`ReplayOptions` fields: `from`, `to`, `actionKind`, `chain`, `onlyChanged`, `includeSimulation`.
+
+## CLI
+
+```bash
+txfence replay \
+  --audit-log ./audit.jsonl \
+  --config ./txfence.config.proposed.ts \
+  --only-changed \
+  --json
+```
+
+Exits 1 if any entries are newly rejected — use as a CI policy regression gate.
+
+```bash
+# With filters
+txfence replay \
+  --audit-log ./audit.jsonl \
+  --config ./txfence.config.proposed.ts \
+  --kind swap \
+  --chain ethereum \
+  --from 1700000000000
+```
+
+## MCP tool
+
+`txfence_replay_audit_log` — AI assistants can analyze policy change impact:
+
+Returns compact JSON with summary and changed entries only. Each changed entry includes direction, action kind/chain, and original and replay rejection reasons.
+
+## Workflow
+
+A typical policy change workflow:
+
+1. Run `txfence diff` to see which test actions change between policies
+2. Run `txfence replay` against the audit log to see real historical impact
+3. Review newly-rejected entries — are any of them legitimate actions?
+4. Deploy if the blast radius is acceptable
