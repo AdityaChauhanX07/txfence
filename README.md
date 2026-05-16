@@ -106,7 +106,7 @@ const policy: Policy = {
 }
 ```
 
-Built-in registry includes 21 assets and 14 protocol entries across Ethereum, Arbitrum, Optimism, Base, Cosmos Hub, and Osmosis. Extend with `createRegistry()` for custom protocols.
+Built-in registry includes 21 assets and 16 protocol entries across Ethereum, Arbitrum, Optimism, Base, Cosmos Hub, and Osmosis. Extend with `createRegistry()` for custom protocols.
 
 ---
 
@@ -463,6 +463,10 @@ await monitor.start()
 ## CLI reference
 
 ```bash
+# Setup and receipts
+txfence init                                       # scaffold a txfence.config.ts in the cwd
+txfence receipt --store ./receipts.jsonl [--filter chain=ethereum]
+
 # Policy and simulation
 txfence simulate         --kind transfer --chain ethereum --to 0x... --token ETH --amount 1e18
 txfence check-policy     --kind transfer --chain ethereum --to 0x... --token ETH --amount 1e18
@@ -505,7 +509,7 @@ txfence provenance proof  --chain ./provenance.jsonl --hash <entryHash>
 }
 ```
 
-Tools: `txfence_simulate`, `txfence_check_policy`, `txfence_submit`, `txfence_get_receipt`, `txfence_explain_rejection`, `txfence_diff_policies`, `txfence_validate_intent`, `txfence_execute_intent`, `txfence_fork_simulate_intent`, `txfence_replay_audit_log`.
+Tools: `txfence_simulate`, `txfence_check_policy`, `txfence_submit`, `txfence_get_receipt`, `txfence_explain_rejection`, `txfence_diff_policies`, `txfence_validate_config`, `txfence_validate_intent`, `txfence_execute_intent`, `txfence_fork_simulate_intent`, `txfence_replay_audit_log`.
 
 ---
 
@@ -558,10 +562,10 @@ packages/cosmos        simulate, build, sign, broadcast
 packages/redis         Redis CapLockProvider with atomic Lua scripts
 packages/storage-pg    PostgreSQL receipt storage — 12 tests
 packages/storage-sqlite SQLite receipt storage — 12 tests
-packages/mcp           MCP server with 10 tools — 5 tests
-packages/cli           CLI with 12 commands — 8 tests
+packages/mcp           MCP server with 11 tools — 5 tests
+packages/cli           CLI with 13 commands — 8 tests
 packages/react         React hooks — 7 tests
-packages/audit         append-only audit log — 14 tests
+packages/audit         append-only audit log — 20 tests
 packages/monitor       on-chain reconciliation monitor — 13 tests
 packages/verify        formal verification + adversarial stress testing — 18 tests
 packages/provenance    cryptographic provenance chains — 49 tests
@@ -591,8 +595,8 @@ packages/integration   Anvil integration tests — 7 passing + 5 skipped
 - [x] Webhook-based human approval with HMAC signing
 - [x] Notification system — console, webhook, composite
 - [x] Dry-run mode with blocker report
-- [x] MCP server with 10 tools
-- [x] CLI with 12 commands
+- [x] MCP server with 11 tools
+- [x] CLI with 13 commands
 - [x] React hooks
 - [x] Append-only audit log with policy snapshot immutability
 - [x] On-chain reconciliation monitor with checkpoint persistence
