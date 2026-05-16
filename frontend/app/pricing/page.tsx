@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 
 const openSourceFeatures = [
   "MIT License — use it anywhere",
-  "Full access to all 15 packages",
+  "Full access to all 17 packages",
   "Self-hosted on your infrastructure",
   "Community support via GitHub Issues",
   "600+ tests, zero type errors",

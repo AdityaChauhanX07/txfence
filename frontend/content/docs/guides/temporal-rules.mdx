@@ -21,11 +21,11 @@ const eventStore = createMemoryEventStore({
 
 const agent = createAgent(
   config, adapters, rpcUrls, executor,
-  undefined, undefined, undefined, undefined,
-  undefined, undefined, undefined, undefined,
-  undefined, undefined, undefined,
-  eventStore,        // 16th parameter
-  'agent-0x123',     // 17th parameter — agentId for scoped predicates
+  undefined, undefined, undefined, undefined,    // 5–8:  capLockProvider, metadataVerifier, approvalProvider, receiptStore
+  undefined, undefined, undefined, undefined,    // 9–12: auditLog, telemetryProvider, capLockConfigs, policyNode
+  undefined, undefined,                          // 13–14: notificationProvider, provenanceChain
+  eventStore,                                    // 15:   eventStore
+  'agent-0x123',                                 // 16:   agentId — used for scoped predicates
 )
 ```
 
@@ -125,16 +125,49 @@ type TemporalConsequence =
 
 ## EventStore interface
 
+All four methods are **synchronous** — no Promises. The store is meant to be hit at every pipeline event with negligible overhead.
+
 ```typescript
-interface EventStore {
-  record(event: PipelineEvent): Promise<void>
-  query(filter: EventFilter): Promise<PipelineEvent[]>
-  prune(beforeMs: number): Promise<void>
-  recent(windowMs: number, agentId?: string): Promise<PipelineEvent[]>
+type EventStore = {
+  record: (event: PipelineEvent) => void
+  query:  (filter?: EventFilter) => PipelineEvent[]
+  prune:  (olderThan: number) => void                            // ms timestamp; events older than this are dropped
+  recent: (
+    n: number,                                                    // number of events, not a window
+    filter?: Omit<EventFilter, 'from' | 'to' | 'windowMs'>,
+  ) => PipelineEvent[]
 }
 ```
 
-`recordPipelineEvent` is called automatically after each pipeline run — it swallows errors so event recording never crashes the pipeline.
+`EventFilter` lets `query()` slice the window by agent, chain, outcome status, contract, or time range:
+
+```typescript
+type EventFilter = {
+  agentId?:         string
+  chain?:           ChainId
+  status?:          PipelineEventOutcome['status']
+  contractAddress?: string
+  from?:            number   // ms timestamp lower bound
+  to?:              number   // ms timestamp upper bound
+  windowMs?:        number   // relative window — "events in the last N ms"
+}
+```
+
+Each recorded event:
+
+```typescript
+type PipelineEvent = {
+  id:           string
+  timestamp:    number
+  agentId:      string
+  chain:        ChainId
+  action:       Action
+  outcome:      PipelineEventOutcome
+  spendAmount?: bigint
+}
+```
+
+The pipeline records events automatically after each run — recording failures are swallowed so event-store errors never crash the pipeline.
 
 <Callout type="info">
   The `temporal_rule_triggered` rejection reason appears in audit log entries and policy evaluations when a temporal rule fires.

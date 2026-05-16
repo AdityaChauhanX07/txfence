@@ -25,14 +25,14 @@ Structurally compatible with OpenTelemetry spans — any OTel tracer satisfies t
 
 ## Wiring into createAgent
 
-Pass as the 11th parameter to `createAgent`:
+Pass as the 10th parameter to `createAgent`:
 
 ```typescript
 const agent = createAgent(
   config, adapters, rpcUrls, executor,
-  capLockProvider, metadataVerifier, receiptStore, approvalProvider,
-  receiptStore, auditLog,
-  telemetryProvider  // 11th parameter
+  undefined, undefined, undefined,    // 5–7: capLockProvider, metadataVerifier, approvalProvider
+  undefined, undefined,                // 8–9: receiptStore, auditLog
+  telemetryProvider,                   // 10:  telemetryProvider
 )
 ```
 

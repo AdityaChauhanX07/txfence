@@ -55,15 +55,16 @@ import type { MevProtectionConfig } from '@txfence/core'
 
 const mevConfig: MevProtectionConfig = {
   flashbots: {
-    endpoint: 'https://rpc.flashbots.net/fast',
+    rpcUrl:        'https://rpc.flashbots.net/fast',  // field is `rpcUrl`, not `endpoint`
+    authSignerKey: process.env.FLASHBOTS_AUTH_KEY,    // optional — enables reputation scoring
   },
   mevBlocker: {
-    endpoint: 'https://rpc.mevblocker.io',
+    rpcUrl: 'https://rpc.mevblocker.io',
   },
 }
 ```
 
-Pass `mevConfig` to `executeEvmAction` via your executor.
+`FlashbotsConfig` has two optional fields: `rpcUrl` (overrides the default endpoint) and `authSignerKey` (private key used to sign requests so Flashbots can attach reputation). `MevBlockerConfig` has only `rpcUrl`. Pass `mevConfig` to `executeEvmAction` via your executor.
 
 ## How it works
 

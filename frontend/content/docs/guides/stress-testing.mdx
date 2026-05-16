@@ -19,15 +19,17 @@ npm install @txfence/verify
 import { stressTest } from '@txfence/verify'
 
 const report = await stressTest(policy, {
-  agentCount:           10,
-  transactionsPerAgent: 20,
-  jitterMs:             100,
-  timeoutMs:            5000,
+  agentCount:              10,
+  transactionsPerScenario: 20,
+  timingJitterMs:          100,
+  timeoutMs:               5000,
 })
 
 console.log(`Survival rate: ${report.survivalRate * 100}%`)
 console.log(`Recommendation: ${report.recommendation}`)
 ```
+
+`StressTestConfig` fields: `agentCount`, `transactionsPerScenario`, `timingJitterMs`, `rpcFailureRate`, `vectors`, `seed`, `timeoutMs` — all optional.
 
 ## Six attack vectors
 
@@ -55,15 +57,25 @@ Off-by-one tests around `maxSpendPerTx`. Tests exact cap, cap+1n, cap-1n, and ze
 
 Multiple agents simultaneously submit transactions above the approval threshold. Tests approval timeout handling. Two scenarios.
 
+### chain_reorg (opt-in)
+
+A seventh attack vector exists in the `AttackVector` type but is **not** included in `DEFAULT_VECTORS`. Opt in explicitly via the `vectors` option if you want to exercise reorg handling — useful when running on chains with frequent reorgs or testing your monitor's `onReorgDetected` callback.
+
 ## RiskReport
 
 ```typescript
-interface RiskReport {
-  survivalRate:    number                    // fraction of scenarios with well-defined results
-  byVector:        Record<string, VectorStats>
-  bySeverity:      Record<string, number>
-  failedScenarios: FailedScenario[]         // sorted by severity
-  recommendation:  string                   // actionable guidance
+type RiskReport = {
+  policy:          Policy
+  totalScenarios:  number
+  survived:        number
+  failed:          number
+  survivalRate:    number                                            // survived / totalScenarios
+  failedScenarios: ScenarioResult[]                                   // sorted by severity
+  byVector:        Partial<Record<AttackVector, VectorStats>>
+  bySeverity:      Partial<Record<ScenarioSeverity, number>>
+  generatedAt:     number
+  durationMs:      number
+  recommendation:  string                                             // actionable guidance
 }
 ```
 

@@ -41,18 +41,18 @@ Pass `policyNode` instead of a flat policy:
 
 ```typescript
 const agent = createAgent(
-  { chains: ['ethereum'], signer },
+  { chains: ['ethereum'], policies: smallSpend, signer },  // `policies` is still required even when using policyNode
   adapters,
   rpcUrls,
   executor,
-  capLockProvider,
-  receiptStore,
-  approvalProvider,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  treasuryPolicy  // policyNode as 12th parameter
+  undefined,         // 5:  capLockProvider
+  undefined,         // 6:  metadataVerifier
+  undefined,         // 7:  approvalProvider
+  undefined,         // 8:  receiptStore
+  undefined,         // 9:  auditLog
+  undefined,         // 10: telemetryProvider
+  undefined,         // 11: capLockConfigs
+  treasuryPolicy,    // 12: policyNode — when set, the pipeline uses tree evaluation instead of the flat policy
 )
 ```
 

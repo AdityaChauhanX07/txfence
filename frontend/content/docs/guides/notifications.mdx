@@ -24,10 +24,9 @@ const notificationProvider = createCompositeNotificationProvider(
 
 const agent = createAgent(
   config, adapters, rpcUrls, executor,
-  undefined, undefined, undefined, undefined,
-  undefined, undefined, undefined, undefined,
-  undefined, undefined, undefined,
-  notificationProvider  // last optional parameter
+  undefined, undefined, undefined, undefined,    // 5–8:  capLockProvider, metadataVerifier, approvalProvider, receiptStore
+  undefined, undefined, undefined, undefined,    // 9–12: auditLog, telemetryProvider, capLockConfigs, policyNode
+  notificationProvider,                          // 13:   notificationProvider
 )
 ```
 

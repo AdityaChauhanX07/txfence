@@ -47,9 +47,9 @@ const swaps = await auditLog.query({
 
 ## AuditEntry
 
-Each entry captures: `action`, `policySnapshot` (immutable clone at decision time), `evaluation`, `simulationResult`, `approvalRequest`, `approvalDecision`, and `outcome`.
+Each entry captures: `id`, `timestamp`, `action`, `policySnapshot` (immutable clone at decision time), `evaluation`, `simulation` (when simulation ran), `approvalRequest`, `approvalDecision`, `outcome`, plus optional `policyVersionId`, `intentId`, and `intentStepId`.
 
-`AuditOutcome` covers: `success`, `policy_rejected`, `simulation_failed`, `approval_timeout`, `execution_failed`, `dry_run`.
+`AuditOutcome` covers six statuses: `success` (carries `txHash`, `confirmedAtBlock`, `gasUsed`), `policy_rejected` (carries `reason`), `simulation_failed`, `approval_timeout`, `execution_failed` (carries `reason: string`), and `dry_run` (carries `stoppedAt: 'policy' | 'simulation' | 'approval' | 'execution'`).
 
 ## Wiring into the pipeline
 

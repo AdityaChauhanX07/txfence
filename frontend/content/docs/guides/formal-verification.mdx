@@ -24,11 +24,14 @@ Can N agents × M transactions reach or exceed the absolute cap?
 ```typescript
 import { verify } from '@txfence/verify'
 
-const result = await verify({
-  kind:                  'absolute_cap_reachability',
-  policy,
-  agentCount:            10,
-  transactionsPerAgent:  10,
+// verify() is synchronous — it returns a result immediately, no await needed
+const result = verify({
+  kind:                 'absolute_cap_reachability',
+  agentCount:           10,
+  transactionsPerAgent: 10,
+  capAmount:            50_000n * 10n ** 6n,   // 50,000 USDC
+  token:                'USDC',
+  maxSpendPerTx:        1_000n * 10n ** 6n,    // 1,000 USDC per tx
 })
 
 if (result.status === 'violated') {
@@ -36,18 +39,21 @@ if (result.status === 'violated') {
 }
 ```
 
-Arithmetic check: `agentCount × transactionsPerAgent × maxSpendPerTx` vs `capAmount`. Generates the minimal counterexample — only the transactions needed to exceed the cap.
+Arithmetic check: `agentCount × transactionsPerAgent × maxSpendPerTx` vs `capAmount`. Generates the minimal counterexample — only the transactions needed to exceed the cap. Properties take cap/token/maxSpendPerTx directly rather than a full `Policy` so the checker can be exercised against hypothetical values without constructing a complete config.
 
 ### rolling_window_saturation
 
 Can N agents collectively exceed a rolling window cap through adversarial scheduling?
 
 ```typescript
-const result = await verify({
+const result = verify({
   kind:                 'rolling_window_saturation',
-  policy,
   agentCount:           5,
   transactionsPerAgent: 20,
+  windowMs:             3_600_000,            // 1 hour
+  capAmount:            25_000n * 10n ** 6n,  // 25,000 USDC rolling cap
+  token:                'USDC',
+  maxSpendPerTx:        1_000n * 10n ** 6n,
 })
 ```
 
@@ -58,7 +64,7 @@ Tests four adversarial scenarios: simultaneous burst, staggered burst, double bu
 Is every action allowed by `innerPolicy` also allowed by `outerPolicy`?
 
 ```typescript
-const result = await verify({
+const result = verify({
   kind:        'policy_containment',
   innerPolicy: stricterPolicy,
   outerPolicy: broaderPolicy,
@@ -71,34 +77,62 @@ Uses `createTestActions` + `diffPolicies` internally. Flags `newly_rejected` act
 
 ```typescript
 type VerificationResult =
-  | { status: 'holds';   checkedBound: number; scenariosChecked: number; durationMs: number }
-  | { status: 'violated'; counterExample: CounterExample; durationMs: number }
-  | { status: 'unknown';  reason: string; durationMs: number }
+  | { status: 'holds';    property: string; checkedBound: CheckBound; scenariosChecked: number; durationMs: number }
+  | { status: 'violated'; property: string; counterExample: CounterExample;                     durationMs: number }
+  | { status: 'unknown';  property: string; reason: string;                                     durationMs: number }
+
+type CheckBound = {
+  agentCount:           number
+  transactionsPerAgent: number
+  windowMs?:            number
+}
 ```
 
 ## CounterExample
 
 ```typescript
-interface CounterExample {
+type CounterExample = {
   description:    string
-  transactions:   Array<{ agentId: string; action: Action; timestamp: number; amount: bigint }>
+  transactions:   TransactionScenario[]
   violatedAt:     number
   violatedAmount: bigint
   capLimit:       bigint
-  checkedBound:   number
+  checkedBound:   CheckBound
+}
+
+type TransactionScenario = {
+  agentId:   string
+  action:    Action
+  timestamp: number
+  amount:    bigint
 }
 ```
 
 ## verifyAll
 
-Run multiple properties in parallel:
+Run multiple properties in parallel. `verifyAll` is async (wraps each sync `verify()` call in a resolved Promise) so consumers get a single `await` instead of N synchronous checks.
 
 ```typescript
 import { verifyAll } from '@txfence/verify'
 
 const results = await verifyAll([
-  { kind: 'absolute_cap_reachability', policy, agentCount: 10, transactionsPerAgent: 10 },
-  { kind: 'rolling_window_saturation', policy, agentCount: 5,  transactionsPerAgent: 20 },
+  {
+    kind:                 'absolute_cap_reachability',
+    agentCount:           10,
+    transactionsPerAgent: 10,
+    capAmount:            50_000n * 10n ** 6n,
+    token:                'USDC',
+    maxSpendPerTx:        1_000n * 10n ** 6n,
+  },
+  {
+    kind:                 'rolling_window_saturation',
+    agentCount:           5,
+    transactionsPerAgent: 20,
+    windowMs:             3_600_000,
+    capAmount:            25_000n * 10n ** 6n,
+    token:                'USDC',
+    maxSpendPerTx:        1_000n * 10n ** 6n,
+  },
 ])
 ```
 

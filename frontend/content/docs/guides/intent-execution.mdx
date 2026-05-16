@@ -27,24 +27,24 @@ const intent: Intent = {
       },
     },
     {
-      id:           'swap',
-      dependsOn:    ['withdraw'],   // runs after withdraw succeeds
+      id:        'swap',
+      dependsOn: ['withdraw'],   // runs after withdraw succeeds
       action: {
         kind:        'swap',
         chain:       'ethereum',
-        fromToken:   { token: 'USDC', amount: 10000n * 10n**6n, decimals: 6 },
-        toToken:     'ETH',
+        from:        { token: 'USDC', amount: 10000n * 10n**6n, decimals: 6 },  // source TokenAmount
+        to:          'ETH',                                                      // destination token symbol
+        via:         '0xE592427A0AEce92De3Edee1F18E0157C05861564',               // router address (Uniswap V3)
         maxSlippage: 50,
-        to:          '0xE592427A0AEce92De3Edee1F18E0157C05861564',
       },
     },
   ],
-  policy: {
-    maxTotalGrossSpend:      { token: 'USDC', amount: 20000n * 10n**6n, decimals: 6 },
-    maxSteps:                5,
-    requireAllSteps:         false,
-    maxDurationMs:           60000,
-    allowedChains:           ['ethereum'],
+  intentPolicy: {                                                                // field is `intentPolicy`, not `policy`
+    maxTotalGrossSpend: { token: 'USDC', amount: 20000n * 10n**6n, decimals: 6 },
+    maxSteps:           5,
+    requireAllSteps:    false,
+    maxDurationMs:      60000,
+    allowedChains:      ['ethereum'],
   },
 }
 ```

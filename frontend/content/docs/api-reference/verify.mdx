@@ -24,13 +24,17 @@ Can N agents × M transactions reach or exceed the absolute cap?
 ```typescript
 import { verify } from '@txfence/verify'
 
-const result = await verify({
-  kind: 'absolute_cap_reachability',
-  policy,
-  agentCount: 10,
+// verify() is synchronous — properties take cap/token/maxSpendPerTx directly
+const result = verify({
+  kind:                 'absolute_cap_reachability',
+  agentCount:           10,
   transactionsPerAgent: 10,
+  capAmount:            50_000n * 10n ** 6n,
+  token:                'USDC',
+  maxSpendPerTx:        1_000n * 10n ** 6n,
 })
-// result.status: 'holds' | 'violated'
+// result.status:        'holds' | 'violated' | 'unknown'
+// result.property:      string identifier of the checked property
 // result.counterExample — minimal counterexample when violated
 ```
 
@@ -39,11 +43,14 @@ const result = await verify({
 Can N agents collectively exceed a rolling window cap through adversarial scheduling?
 
 ```typescript
-const result = await verify({
-  kind: 'rolling_window_saturation',
-  policy,
-  agentCount: 5,
+const result = verify({
+  kind:                 'rolling_window_saturation',
+  agentCount:           5,
   transactionsPerAgent: 20,
+  windowMs:             3_600_000,
+  capAmount:            25_000n * 10n ** 6n,
+  token:                'USDC',
+  maxSpendPerTx:        1_000n * 10n ** 6n,
 })
 ```
 
@@ -52,7 +59,7 @@ const result = await verify({
 Is every action allowed by `innerPolicy` also allowed by `outerPolicy`?
 
 ```typescript
-const result = await verify({
+const result = verify({
   kind: 'policy_containment',
   innerPolicy,
   outerPolicy,
@@ -61,23 +68,23 @@ const result = await verify({
 
 ## Adversarial stress testing
 
-Six attack vectors tested against the policy:
+Six default attack vectors tested against the policy (a seventh, `chain_reorg`, exists in the type but is not in `DEFAULT_VECTORS` — opt in via the `vectors` option):
 
 ```typescript
 import { stressTest } from '@txfence/verify'
 
 const report = await stressTest(policy, {
-  agentCount: 10,
-  transactionsPerAgent: 20,
+  agentCount:              10,
+  transactionsPerScenario: 20,
 })
 
 console.log(report.survivalRate)
 console.log(report.recommendation)
 ```
 
-**Six vectors:** `rapid_fire`, `coordinated_drain`, `rpc_failure`, `stale_simulation`, `cap_boundary`, `approval_flood`.
+**Six default vectors:** `rapid_fire`, `coordinated_drain`, `rpc_failure`, `stale_simulation`, `cap_boundary`, `approval_flood`.
 
-`RiskReport` includes: `survivalRate`, `byVector`, `bySeverity`, `failedScenarios`, `recommendation`.
+`RiskReport` includes: `policy`, `totalScenarios`, `survived`, `failed`, `survivalRate`, `failedScenarios`, `byVector`, `bySeverity`, `generatedAt`, `durationMs`, `recommendation`.
 
 ## CLI
 

@@ -3,6 +3,8 @@ title: Agent Health & Shutdown
 description: Graceful shutdown with in-flight drain, health checks for Kubernetes probes, and cap lock inspection.
 ---
 
+import { Callout } from "nextra/components";
+
 # Agent Health & Shutdown
 
 Production agents need graceful shutdown — draining in-flight submissions before stopping — and health endpoints for load balancers and Kubernetes probes. txfence builds both into the agent interface.
@@ -41,7 +43,7 @@ const result = await agent.shutdown(30_000)  // 30 second timeout
 
 console.log(result.completed)        // submissions that finished cleanly
 console.log(result.abandoned)        // submissions that exceeded timeout
-console.log(result.capLocksReleased) // whether cap locks were inspected
+console.log(result.capLocksReleased) // number of cap locks released by shutdown
 ```
 
 `submit()` throws when called after `shutdown()` — no new submissions accepted during drain.
@@ -49,14 +51,18 @@ console.log(result.capLocksReleased) // whether cap locks were inspected
 ## AgentShutdownResult
 
 ```typescript
-interface AgentShutdownResult {
+type AgentShutdownResult = {
   completed:        number
   abandoned:        number
-  capLocksReleased: boolean
+  capLocksReleased: number
 }
 ```
 
 Submissions that exceed the timeout are counted as `abandoned`. They may or may not have executed on-chain — check the monitor for unrecorded transactions.
+
+<Callout type="info">
+  `capLocksReleased` reports how many cap locks were released by shutdown. The pipeline holds lock IDs internally and does not expose them at the agent level — in v1 this counter is best-effort and may be 0 even when locks remain. Restart the cap lock provider, or wait for the rolling window, to clear any stragglers.
+</Callout>
 
 ## isShuttingDown()
 
@@ -73,20 +79,13 @@ Pass `capLockConfigs` to `createAgent` to enable cap lock inspection during shut
 ```typescript
 const agent = createAgent(
   config, adapters, rpcUrls, executor,
-  capLockProvider,
-  receiptStore,
-  approvalProvider,
-  notificationProvider,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  eventStore,
-  agentId,
-  capLockConfigs,  // 18th parameter
+  capLockProvider,    // 5:  capLockProvider
+  undefined,          // 6:  metadataVerifier
+  approvalProvider,   // 7:  approvalProvider
+  receiptStore,       // 8:  receiptStore
+  undefined,          // 9:  auditLog
+  undefined,          // 10: telemetryProvider
+  capLockConfigs,     // 11: capLockConfigs — required for inspection on shutdown
 )
 ```
 

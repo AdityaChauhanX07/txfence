@@ -19,8 +19,9 @@ const auditLog = createFileAuditLog('./audit.jsonl')
 
 const agent = createAgent(
   config, adapters, rpcUrls, executor,
-  undefined, undefined, undefined, undefined,
-  receiptStore, auditLog
+  undefined, undefined, undefined,   // 5–7: capLockProvider, metadataVerifier, approvalProvider
+  receiptStore,                       // 8:  receiptStore
+  auditLog,                           // 9:  auditLog
 )
 ```
 
@@ -50,26 +51,33 @@ const byChain = await auditLog.query({ chain: 'ethereum' })
 
 ## AuditEntry structure
 
-Each entry captures:
-
-- `action` — the full action that was submitted
-- `policySnapshot` — immutable deep clone of the policy at decision time
-- `policyVersionId` — stable SHA-256 ID of the policy (when using policy versioning)
-- `evaluation` — which checks ran and their results
-- `simulationResult` — gas estimate, coverage, caveats
-- `approvalRequest` / `approvalDecision` — webhook dispatch and human decision
-- `outcome` — final result
+```typescript
+type AuditEntry = {
+  id:               string
+  timestamp:        number
+  action:           Action
+  policySnapshot:   Policy                 // immutable deep clone at decision time
+  evaluation:       PolicyEvaluation
+  simulation?:      SimulationResult       // populated when simulation ran
+  approvalRequest?: ApprovalRequest
+  approvalDecision?: ApprovalDecision
+  outcome:          AuditOutcome
+  policyVersionId?: string                 // stable SHA-256 ID when using policy versioning
+  intentId?:        string                 // populated when entry is part of an intent
+  intentStepId?:    string
+}
+```
 
 ## AuditOutcome
 
 ```typescript
 type AuditOutcome =
-  | { status: 'success';           receipt: SuccessReceipt }
-  | { status: 'policy_rejected';   rejectionReason: PolicyRejectionReason }
-  | { status: 'simulation_failed'; caveats: string[] }
+  | { status: 'success';           txHash: string; confirmedAtBlock: number; gasUsed: string }
+  | { status: 'policy_rejected';   reason: PolicyRejectionReason | undefined }
+  | { status: 'simulation_failed' }
   | { status: 'approval_timeout' }
-  | { status: 'execution_failed';  reason: ExecutionFailureReason }
-  | { status: 'dry_run';           stoppedAt: 'policy' | 'simulation' | 'approval' }
+  | { status: 'execution_failed';  reason: string }
+  | { status: 'dry_run';           stoppedAt: 'policy' | 'simulation' | 'approval' | 'execution' }
 ```
 
 ## Policy snapshot immutability

@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useSimulate, useSubmit } from './index.js'
+import {
+  useSimulate,
+  useSubmit,
+  useDryRun,
+  useIntentSubmit,
+  useAgentHealth,
+} from './index.js'
 import type { SimulationResult, Policy, TransferAction } from '@txfence/core'
 
 const passingSim: SimulationResult = {
@@ -51,6 +57,45 @@ const mockAgent = {
     action: transferAction,
     txHash: '',
     reason: 'signing and broadcasting not yet implemented',
+  }),
+  dryRun: vi.fn().mockResolvedValue({
+    action: transferAction,
+    evaluation: { passed: true, checksRun: [] },
+    approvalRequired: false,
+    capLockAvailable: true,
+    wouldProceed: true,
+    blockers: [],
+    dryRunAt: 0,
+  }),
+  executeIntent: vi.fn().mockResolvedValue({
+    intentId: 'intent-1',
+    status: 'completed',
+    stepResults: [],
+    completedStepIds: [],
+    failedStepIds: [],
+    skippedStepIds: [],
+    receipts: {},
+    positionAnalysis: {
+      steps: [],
+      totalGrossOutflow: 0n,
+      netChange: [],
+      maxIntermediateExposure: 0n,
+      isSingleToken: true,
+    },
+    intentEvaluation: {
+      passed: true,
+      intentId: 'intent-1',
+      stepEvaluations: [],
+      executionPlan: [],
+    },
+    startedAt: 0,
+    completedAt: 0,
+    durationMs: 0,
+  }),
+  health: vi.fn().mockReturnValue({
+    status: 'healthy',
+    inFlight: 0,
+    uptime: 1000,
   }),
 }
 
@@ -132,5 +177,84 @@ describe('useSubmit', () => {
       result.current.reset()
     })
     expect(result.current.result).toBeNull()
+  })
+})
+
+describe('useDryRun', () => {
+  it('starts with null result and not loading', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { result } = renderHook(() => useDryRun(mockAgent as any))
+    expect(result.current.result).toBeNull()
+    expect(result.current.loading).toBe(false)
+  })
+
+  it('sets result after dryRun', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { result } = renderHook(() => useDryRun(mockAgent as any))
+    await act(async () => {
+      await result.current.dryRun(transferAction, basePolicy)
+    })
+    expect(result.current.loading).toBe(false)
+    expect(result.current.result).not.toBeNull()
+    expect(result.current.result?.wouldProceed).toBe(true)
+  })
+
+  it('resets state correctly', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { result } = renderHook(() => useDryRun(mockAgent as any))
+    await act(async () => {
+      await result.current.dryRun(transferAction, basePolicy)
+    })
+    act(() => {
+      result.current.reset()
+    })
+    expect(result.current.result).toBeNull()
+  })
+})
+
+describe('useIntentSubmit', () => {
+  const intent = {
+    id: 'intent-1',
+    steps: [{ id: 'step-1', action: transferAction }],
+  }
+
+  it('starts with null result and not loading', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { result } = renderHook(() => useIntentSubmit(mockAgent as any))
+    expect(result.current.result).toBeNull()
+    expect(result.current.loading).toBe(false)
+  })
+
+  it('sets result after executeIntent', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { result } = renderHook(() => useIntentSubmit(mockAgent as any))
+    await act(async () => {
+      await result.current.executeIntent(intent)
+    })
+    expect(result.current.loading).toBe(false)
+    expect(result.current.result?.status).toBe('completed')
+  })
+})
+
+describe('useAgentHealth', () => {
+  it('returns initial health snapshot synchronously', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { result } = renderHook(() => useAgentHealth(mockAgent as any))
+    expect(result.current.status).toBe('healthy')
+    expect(result.current.inFlight).toBe(0)
+  })
+
+  it('polls at configured interval', async () => {
+    vi.useFakeTimers()
+    mockAgent.health.mockClear()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    renderHook(() => useAgentHealth(mockAgent as any, { pollIntervalMs: 100 }))
+    expect(mockAgent.health).toHaveBeenCalled()
+    const before = mockAgent.health.mock.calls.length
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
+    expect(mockAgent.health.mock.calls.length).toBeGreaterThan(before)
+    vi.useRealTimers()
   })
 })

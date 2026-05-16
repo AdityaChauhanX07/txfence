@@ -35,16 +35,24 @@ const chain = createFileProvenanceChain('./provenance.jsonl')
 
 ## Appending records
 
+`chain.append()` takes a `ProvenanceRecordInput` — everything in `ProvenanceRecord` except `id`, `previousHash`, and `entryHash` (those are computed for you).
+
 ```typescript
 await chain.append({
-  agentId: 'agent-0x123',
-  policyVersionId: 'abc123...',
+  timestamp:        Date.now(),
+  agentId:          'agent-0x123',
+  policyVersionId:  'abc123...',
   action,
-  simulationResult,
-  approvalDecision,
-  submittedAtBlock: 21000000n,
-  outcome: 'success',
-  receipt,
+  simulationResult,                           // optional
+  approvalDecision: 'not_required',           // 'approved' | 'rejected' | 'not_required'
+  submittedAtBlock: 21000000,                 // plain number, not bigint
+  outcome: {                                  // ProvenanceOutcome discriminated union
+    status:           'success',
+    txHash:           '0x...',
+    confirmedAtBlock: 21000001,
+    gasUsed:          '21000',
+  },
+  receipt,                                    // optional
 })
 ```
 
@@ -52,16 +60,20 @@ await chain.append({
 
 ```typescript
 const result = await chain.verify()
-// result.valid: boolean
-// result.violations: Array<{ kind: 'hash_mismatch' | 'chain_broken' | 'invalid_hash', index: number }>
+// result.valid:      boolean
+// result.entryCount: number
+// result.firstHash / result.lastHash / result.merkleRoot: string
+// result.verifiedAt: number
+// result.violations: ChainViolation[]
+//   each: { entryId, entryHash, violation: 'hash_mismatch'|'chain_broken'|'invalid_hash', details }
 ```
 
 ## Merkle proofs
 
 ```typescript
-const root = await chain.getMerkleRoot()
-const proof = await chain.generateProof(entryHash)
-const valid = await chain.verifyProof(proof)
+const root  = await chain.getMerkleRoot()           // async
+const proof = await chain.generateProof(entryHash)  // async — returns MerkleProof | null
+const valid = chain.verifyProof(proof)              // synchronous — no await
 ```
 
 Compact proof that a specific record exists without revealing others.

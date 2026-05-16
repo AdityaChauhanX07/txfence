@@ -19,6 +19,10 @@ npm install @txfence/react @txfence/core @txfence/evm
 
 Creates a stable agent instance memoized for the component lifetime.
 
+<Callout type="warning">
+  The agent is memoized with an empty dependency array — config changes after mount do not propagate. If your `config`, `policy`, `adapters`, or `rpcUrls` need to change at runtime, pass a `key` prop to the component and let React remount it.
+</Callout>
+
 ```typescript
 function useAgent(config: {
   config:   AgentConfig

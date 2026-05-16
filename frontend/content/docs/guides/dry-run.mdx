@@ -33,19 +33,20 @@ console.log(result.blockers)      // array of DryRunBlocker
 ## DryRunResult
 
 ```typescript
-interface DryRunResult {
-  wouldProceed:      boolean
-  blockers:          DryRunBlocker[]
-  evaluation:        PolicyEvaluation
-  simulation?:       SimulationResult
-  approvalRequired:  boolean
-  approvalThreshold: TokenAmount
-  capLockAvailable:  boolean
-  dryRunAt:          number
+type DryRunResult = {
+  action:             Action
+  evaluation:         PolicyEvaluation
+  simulation?:        SimulationResult
+  approvalRequired:   boolean
+  approvalThreshold?: { amount: bigint; token: string }
+  capLockAvailable:   boolean
+  wouldProceed:       boolean
+  blockers:           DryRunBlocker[]
+  dryRunAt:           number
 }
 ```
 
-`wouldProceed: true` only when all checks pass with zero blockers.
+`wouldProceed: true` only when all checks pass with zero blockers. `approvalThreshold` is only present when the policy defines `humanApprovalThreshold` and the action's value would trigger it.
 
 ## DryRunBlocker
 
@@ -53,11 +54,11 @@ Five blocker kinds:
 
 ```typescript
 type DryRunBlocker =
-  | { kind: 'policy_rejected';       rejectionReason: PolicyRejectionReason }
-  | { kind: 'simulation_failed';     caveats: string[] }
-  | { kind: 'simulation_stale';      stalenessMs: number }
-  | { kind: 'approval_required';     threshold: TokenAmount }
-  | { kind: 'cap_lock_unavailable';  capId: string }
+  | { kind: 'policy_rejected';      reason: PolicyRejectionReason }
+  | { kind: 'simulation_failed';    caveats: SimulationCaveat[] }
+  | { kind: 'simulation_stale';     stalenessMs: number }
+  | { kind: 'approval_required';    thresholdAmount: bigint; thresholdToken: string }
+  | { kind: 'cap_lock_unavailable'; capId: string }
 ```
 
 ## Cap lock behavior
