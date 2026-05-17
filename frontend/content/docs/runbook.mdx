@@ -15,15 +15,21 @@ This runbook covers the operational procedures for teams running txfence in prod
 
 Before deploying an agent to production, verify:
 
-- [ ] Policy has `defaults: { effect: "deny" }` (not allow)
-- [ ] All action types the agent might use are explicitly covered by a rule
-- [ ] Rate limits are configured (`@txfence/rate-limiter`)
-- [ ] Circuit breaker is configured (`@txfence/circuit-breaker`)
-- [ ] Audit log is configured with a persistent store (not in-memory)
-- [ ] Signing key is in an HSM or KMS (not a plaintext env var in CI)
-- [ ] A separate cold wallet holds the treasury; the agent wallet holds a working balance only
-- [ ] Policy has been tested with `fence.evaluate(action, { dryRun: true })` against representative actions
-- [ ] An alert is configured for `onViolation` events
+- [ ] `validateConfig(policy)` returns `{ valid: true, errors: [], warnings: [] }` — see [Config Validation](/docs/guides/config-validation)
+- [ ] All action kinds the agent will use (`transfer`, `swap`, `contract_call`) are covered by `Policy.allowedContracts` and `maxSpendPerTx`
+- [ ] `humanApprovalThreshold` is set and a working `ApprovalProvider` (memory for staging, `createWebhookApprovalProvider` for production) is wired in
+- [ ] `humanApprovalTimeoutMs` is at least a few minutes — too-short windows surface as `approval_timeout` rejections in normal operation
+- [ ] A `CapLockProvider` is configured — `createMemoryCapLockProvider` for single-process, `@txfence/redis` for multi-process
+- [ ] `simulationStalenessMs` is set (typically 30,000 ms) so stale simulations are rejected
+- [ ] `temporalRules` cover spend velocity, consecutive failures, and approval floods — see [Temporal Rules](/docs/guides/temporal-rules)
+- [ ] If using `Intent` execution, `intentPolicy.maxTotalGrossSpend` and `maxDurationMs` are set
+- [ ] A `ReceiptStore` is configured with a persistent backend (`@txfence/storage-pg` or `@txfence/storage-sqlite`)
+- [ ] An `AuditLog` is configured with `createFileAuditLog(path)` or `@txfence/audit`'s file backend; for cryptographic tamper evidence, also wire a `ProvenanceChain`
+- [ ] [`@txfence/monitor`](/docs/api-reference/monitor) is running with `agentAddresses`, a `CheckpointStore`, and `onUnrecordedTransaction` set
+- [ ] The `Signer` is backed by an HSM/KMS, not a plaintext private key
+- [ ] A separate cold wallet holds the treasury; the agent wallet holds only the working balance
+- [ ] `agent.dryRun(input)` has been run against a representative action sample and `wouldProceed === true` for every legitimate action
+- [ ] [Formal verification](/docs/guides/formal-verification) and [stress testing](/docs/guides/stress-testing) (`stressTest(policy)`) have been run in CI and exit 0
 
 ---
 
@@ -31,77 +37,87 @@ Before deploying an agent to production, verify:
 
 ### Key Metrics
 
-| Metric | Alert Threshold | Meaning |
-|---|---|---|
-| `violations_per_minute` | > 10 | Agent is repeatedly proposing blocked actions |
-| `circuit_breaker_trips` | > 0 | Consecutive failures detected; agent halted |
-| `simulation_failures` | > 5% | RPC or chain instability |
-| `audit_log_write_errors` | > 0 | Audit store unavailable |
-| `p99_evaluate_latency_ms` | > 500ms | Policy evaluation is a bottleneck |
+Wire a [`TelemetryProvider`](/docs/guides/telemetry) and a [`NotificationProvider`](/docs/guides/notifications). The pipeline emits these spans and events automatically; export them to your observability stack.
+
+| Metric | Source | Alert Threshold | Meaning |
+|---|---|---|---|
+| Rate of `policy_rejected` | `txfence.pipeline.status` attribute | > 10/min | Agent is repeatedly proposing blocked actions |
+| Rate of `simulation_failed` | same | > 5% of submissions | RPC instability or contract reverts |
+| Rate of `approval_timeout` | same | any | Humans aren't responding — webhook/escalation broken |
+| `cap_warning` events | NotificationProvider | any | A cap is at the configured warning threshold |
+| `monitor_unrecorded` (severity: critical) | NotificationProvider | any | Tx on-chain from agent address that txfence did not record |
+| `monitor_reorg` | NotificationProvider | any | A recorded receipt's tx moved blocks |
+| Circuit breaker `closed → open` | [`CircuitBreaker.onStateChange`](/docs/guides/circuit-breaker) | any | RPC failures clustered — agent paused |
+| `txfence.pipeline` span duration (p99) | TelemetryProvider | > 500 ms | Policy + simulation latency above target |
 
 ### Setting Up Alerts
 
 ```typescript
-const fence = createFence({
-  adapter,
-  policy,
-  onViolation: (violation) => {
-    metrics.increment("txfence.violations", {
-      rule: violation.ruleId,
-      action: violation.action.type,
-    });
+import {
+  createWebhookNotificationProvider,
+  createConsoleNotificationProvider,
+  createCompositeNotificationProvider,
+} from "@txfence/core";
 
-    if (violation.type === "circuit-breaker-trip") {
-      pagerduty.trigger({
-        summary: `txfence circuit breaker tripped: ${violation.reason}`,
-        severity: "critical",
-      });
-    }
-  },
-});
+const notificationProvider = createCompositeNotificationProvider(
+  createConsoleNotificationProvider({ prefix: "[txfence]" }),
+  createWebhookNotificationProvider("https://hooks.pagerduty.com/...", {
+    secret: process.env.WEBHOOK_SECRET,
+  }),
+);
+
+// Pass as notificationProvider param to createAgent (slot 13)
 ```
+
+Events fired: `policy_rejected`, `execution_success`, `execution_failed`, `approval_requested`, `approval_decision`, `cap_warning`, `monitor_unrecorded`, `monitor_reorg`.
 
 ---
 
 ## Incident Response
 
-### Agent Is Blocked (Circuit Breaker Tripped)
+### Agent Is Repeatedly Rejected
 
 <Steps>
 
 ### Identify the trigger
 
-Check the audit log for the consecutive failures that triggered the trip:
+Query the audit log for the recent rejections:
 
 ```typescript
-const recentEntries = await auditLog.query({
-  limit: 20,
-  order: "desc",
+const rejected = await auditLog.query({
+  status: "policy_rejected",
+  from:   Date.now() - 3_600_000,   // last hour
 });
-const failures = recentEntries.filter(e => !e.result.allowed);
-console.log(failures.map(f => f.result.violations));
+
+for (const entry of rejected) {
+  console.log(entry.outcome.reason, entry.action.kind, entry.action.chain);
+}
 ```
 
-### Determine if the block is correct
+### Determine if the rejection is correct
 
-Review the blocked actions. Ask:
-- Is this a legitimate action the agent should be taking?
-- Is this a symptom of a bug in the agent's logic?
-- Is this an attack?
+Each `PolicyRejectionReason` maps to a specific check. Ask:
 
-### Reset the circuit breaker (if appropriate)
+- `chain_not_allowed` — should we extend `Policy.chains`?
+- `contract_not_allowed` — should we add the contract to `allowedContracts`, or is the agent talking to the wrong protocol?
+- `spend_exceeds_cap` / `cap_lock_unavailable` — is the cap correct, or is the agent misjudging amount?
+- `gas_buffer_insufficient` — is the chain congested? Increase `gasBufferMultiplier`.
+- `slippage_not_declared` — agent submitted a swap with `maxSlippage: 0`; fix the agent.
+- `bytecode_hash_mismatch` / `owner_address_mismatch` — the on-chain contract changed; re-pin the metadata after review.
+- `contract_entry_expired` — the `ContractEntry.expiresAt` lapsed; re-attest the contract.
+- `temporal_rule_triggered` — sliding-window pattern detected; check `temporalRules` triggers.
 
-```typescript
-fence.getPlugin("circuit-breaker").reset();
+### Run replay before adjusting policy
+
+```bash
+# Test the proposed change against the historical audit log
+txfence replay \
+  --audit-log ./audit.jsonl \
+  --config ./txfence.config.proposed.ts \
+  --only-changed
 ```
 
-<Callout type="warning">
-  Only reset the circuit breaker after you understand why it tripped. Resetting without investigation defeats the purpose.
-</Callout>
-
-### Update policy if needed
-
-If the circuit breaker tripped because of a legitimate new action type the policy didn't account for, update the policy rules before resetting.
+The CLI exits 1 if any historical actions become newly-rejected. See [Replay & Backtesting](/docs/guides/replay).
 
 </Steps>
 
@@ -111,41 +127,71 @@ If the circuit breaker tripped because of a legitimate new action type the polic
 
 <Steps>
 
-### Halt the agent immediately
+### Drain in-flight work
 
 ```typescript
-fence.getPlugin("circuit-breaker").trip("manual-halt");
+const result = await agent.shutdown(30_000);
+console.log(result);   // { completed, abandoned, capLocksReleased }
 ```
 
-Or kill the agent process and remove its signing key from the environment.
+`agent.shutdown()` refuses new `submit()` calls immediately and waits up to `timeoutMs` for in-flight pipelines to complete. See [Agent Health & Shutdown](/docs/guides/agent-health).
 
-### Review audit log
+### Verify the audit log integrity
 
-The audit log has a complete record of every action the agent proposed and whether it was allowed:
+If you're using `@txfence/provenance`:
 
 ```typescript
-const entries = await auditLog.query({
-  fromTimestamp: suspicionStartTime,
-  allowed: true,  // only executed transactions
+const result = await chain.verify();
+if (!result.valid) {
+  for (const v of result.violations) {
+    console.error(`${v.entryId}: ${v.violation} — ${v.details}`);
+  }
+}
+```
+
+Or via CLI:
+
+```bash
+txfence provenance verify --chain ./provenance.jsonl
+```
+
+Exit 0 = chain intact, exit 1 = tampering detected.
+
+### Reconcile against the chain
+
+Query the monitor for unrecorded transactions:
+
+```typescript
+import { createMonitor } from "@txfence/monitor";
+
+// onUnrecordedTransaction is required — keep its handler logging at minimum
+const monitor = createMonitor({
+  chains: ["ethereum"],
+  agentAddresses: { ethereum: [agentAddress] },
+  rpcUrls,
+  receiptStore,
+  checkpointStore,
+  onUnrecordedTransaction: (event) => {
+    if (event.severity === "critical") {
+      console.error("CRITICAL: unrecorded tx", event);
+    }
+  },
 });
+await monitor.start();
 ```
 
-### Verify on-chain
-
-Cross-reference the audit log transaction hashes with an explorer. The audit log records what txfence submitted; the explorer confirms what the chain accepted.
+A `critical` event means a tx from the agent's address landed on-chain without `txfence` recording it — investigate immediately. Either the signer was used out-of-band, or the agent is running in a configuration that bypasses `runPipeline`.
 
 ### Rotate the signing key
 
-Even if the agent was not compromised, rotate the key as a precaution:
-
 ```bash
-# Generate new key
+# Generate new key via cast (or your KMS)
 cast wallet new
 
-# Update environment
+# Update environment / KMS reference
 export AGENT_PRIVATE_KEY=0xNewKey...
 
-# Restart agent
+# Restart agent — pre-restart audit + provenance entries remain hash-verifiable
 ```
 
 </Steps>
@@ -154,53 +200,74 @@ export AGENT_PRIVATE_KEY=0xNewKey...
 
 ## Policy Updates
 
-### Zero-Downtime Policy Update
+### Zero-Downtime Policy Change
 
-txfence supports live context updates without restarting:
+The `Policy` is passed *per submission*: `agent.submit({ action, policy })`. You can roll a new policy by simply passing it to subsequent submits — no agent restart required, in-flight pipelines complete under the old policy.
 
-```typescript
-// Update the allowlist without restarting the fence
-fence.updateContext({
-  allowlist: [...currentAllowlist, "0xNewAddress"],
-});
-```
+For changes to the providers (cap lock, audit log, telemetry), do a blue-green agent swap:
 
-For policy rule changes (not just context), you must restart the fence with the new policy. Use a blue-green deployment:
-
-1. Start a new fence instance with the updated policy
-2. Drain the old instance (wait for in-flight actions to complete)
+1. Start a new `createAgent` instance with the updated providers
+2. `agent.shutdown(timeoutMs)` on the old instance — drains in-flight work, refuses new submits
 3. Switch traffic to the new instance
-4. Shut down the old instance
+4. Verify `health()` on both before fully retiring the old
 
 ### Testing a Policy Change
 
-Always test against production-representative actions in dry-run mode before deploying:
+Always run both diff and replay before deploying:
 
-```typescript
-const testActions = loadTestFixtures("./fixtures/prod-sample.json");
+```bash
+# 1. Diff — synthetic actions, future-looking
+txfence diff \
+  --config-a ./current.config.ts \
+  --config-b ./proposed.config.ts \
+  --generate-actions
 
-for (const action of testActions) {
-  const result = await fence.evaluate(action, { dryRun: true });
-  console.log(action.id, result.allowed, result.violations);
-}
+# 2. Replay — historical audit log, retrospective
+txfence replay \
+  --audit-log ./audit.jsonl \
+  --config ./proposed.config.ts \
+  --only-changed
+
+# 3. Stress test — adversarial scenarios
+txfence stress-test --config ./proposed.config.ts --agents 10 --transactions 20
+
+# 4. Verify properties hold
+txfence verify rolling-window --config ./proposed.config.ts
+txfence verify absolute-cap   --config ./proposed.config.ts
 ```
+
+All four exit non-zero on regressions — drop them into CI as required gates.
+
+### Pinning Known-Good Policy Versions
+
+Use [Policy Versioning](/docs/guides/policy-versioning) to pin a SHA-256 fingerprint in CI:
+
+```bash
+EXPECTED="a3f2c1d8e9b7..."
+ACTUAL=$(txfence policy-snapshot --config ./txfence.config.ts --json | jq -r '.id')
+if [ "$ACTUAL" != "$EXPECTED" ]; then
+  echo "Policy has changed — review and update the pinned hash"
+  exit 1
+fi
+```
+
+The audit log records `policyVersionId` on every entry, so compliance teams can reconstruct exactly which policy was active for any historical decision.
 
 ---
 
 ## Audit Log Verification
 
-Verify the integrity of the audit log at any time:
+Run the integrity check on a schedule (e.g., daily cron) plus on demand:
 
-```typescript
-import { verifyAuditLog } from "@txfence/audit-log";
+```bash
+# Plain audit log (no cryptographic chain) — only checks parse + ordering
+txfence dry-run --config ./txfence.config.ts <action>
 
-const result = await verifyAuditLog(auditLog);
-if (!result.valid) {
-  console.error("Audit log tampered at entry:", result.firstInvalidEntry);
-}
+# Provenance chain — full hash + Merkle verification
+txfence provenance verify --chain ./provenance.jsonl --json
 ```
 
-Run this check:
+Run this:
 - After any incident
 - Before using audit logs as evidence in a dispute
 - As a weekly scheduled job for compliance
@@ -210,18 +277,20 @@ Run this check:
 ## Upgrading txfence
 
 <Callout type="info">
-  txfence follows semver. Minor and patch releases are backward compatible. Major releases may require policy config changes — check the CHANGELOG.
+  txfence follows semver. Minor and patch releases are backward compatible. Major releases may require config changes — check `CHANGELOG.md` and `MIGRATION.md` at the repo root.
 </Callout>
 
 ```bash
-# Check current version
-pnpm list @txfence/core
+# Check current versions
+pnpm list @txfence/core @txfence/evm @txfence/audit @txfence/monitor
 
 # Upgrade
-pnpm update @txfence/core @txfence/evm
+pnpm update @txfence/core @txfence/evm @txfence/audit @txfence/monitor
 
-# Verify no breaking changes
+# Verify nothing broke
 pnpm test
+txfence verify rolling-window --config ./txfence.config.ts
+txfence stress-test --config ./txfence.config.ts
 ```
 
-After upgrading, run your policy test suite and verify the audit log verification still passes before deploying to production.
+After upgrading, re-run `validateConfig`, `stress-test`, and `provenance verify` before resuming production traffic.

@@ -14,19 +14,25 @@ txfence operates within a specific trust model. Understanding what it does and d
 
 <Image
   src="/images/trust-boundaries.svg"
-  alt="Trust boundaries — trusted zone contains policy definitions, SDK code, and chain adapter config. Untrusted zone contains agent outputs, external data, user inputs, and on-chain state."
+  alt="Trust boundaries — trusted zone contains policy definitions, SDK code, signer, and chain adapter config. Untrusted zone contains agent outputs, external data, user inputs, and on-chain state."
   width={680}
   height={280}
   style={{ width: '100%', height: 'auto' }}
 />
 
+The trusted zone contains the `Policy` object, the `Signer` you pass to `createAgent`, the chain adapters, the pluggable providers (`CapLockProvider`, `ApprovalProvider`, `ReceiptStore`, `AuditLog`, `ProvenanceChain`), and the `executor` callback. Everything that arrives from the agent's reasoning layer is untrusted input — `runPipeline` treats it as data, never as logic.
+
 ## What txfence Guarantees
 
-**Policy enforcement is synchronous and blocking.** An action cannot reach the chain unless `fence.evaluate()` returns `allowed: true`. There is no async gap between evaluation and execution — the fence holds the signing key.
+**Policy enforcement is synchronous and blocking.** An action cannot reach the chain unless every stage of `runPipeline` clears. There is no async gap between evaluation and execution — the same call that returns `{ status: 'success' }` is the call that broadcast the transaction. The `Signer` lives inside `AgentConfig`, the executor runs inside the pipeline, and there is no observable state between "policy passed" and "transaction sent."
 
-**Audit logs are append-only and chain-linked.** Each entry includes the SHA-256 hash of the previous entry. Deleting or modifying a historical entry invalidates all subsequent hashes, making tampering detectable.
+**Cancel-on-timeout is the hard default.** A `humanApprovalTimeoutMs` that expires returns `{ status: 'approval_timeout' }` — it never falls through to execute. This is the single most common failure mode in approval systems, and txfence makes the safe behavior unconditional.
 
-**Simulation uses a forked chain snapshot.** The simulation always forks from the latest confirmed block header. It cannot be manipulated by pending transactions or mempool state.
+**Cap locks are two-phase.** `CapLockProvider.acquire` reserves budget atomically. `commit` records the spend after broadcast succeeds. `release` returns the reservation on any failure. The Redis implementation uses atomic Lua scripts, so two agents racing to spend the last 100 USDC of a shared cap cannot both succeed.
+
+**Audit and provenance are append-only.** `createFileAuditLog` writes NDJSON one line at a time and never rewrites. `createFileProvenanceChain` extends this with SHA-256 hash chaining — modifying any historical entry invalidates every entry after it, and Merkle proofs let you prove a single record exists without disclosing the rest. See [Provenance Chains](/docs/guides/provenance-chains).
+
+**Simulation uses a forked chain snapshot.** `eth_call` and Tenderly fork simulations both run against the latest confirmed block header — pending mempool state cannot influence the result. The `state_may_diverge` caveat is always present so callers know that execution will run against a newer block.
 
 ## What txfence Does Not Guarantee
 
@@ -36,11 +42,11 @@ txfence operates within a specific trust model. Understanding what it does and d
 
 **txfence does not protect against:**
 
-- **Compromised signing keys** — if an attacker gains access to the private key, they can bypass txfence entirely by submitting transactions directly to the RPC
-- **Malicious chain adapters** — if you supply a tampered adapter, it can return false simulation results
-- **Policy misconfiguration** — a policy with `defaults: { effect: "allow" }` will allow any action that doesn't match a deny rule
-- **MEV / sandwich attacks** — txfence evaluates the action before it hits the mempool; it cannot control execution order
-- **Smart contract exploits** — vulnerabilities in the contracts being called are outside txfence's scope
+- **Compromised signing keys** — if an attacker exfiltrates the `Signer`'s private key, they can broadcast transactions directly to any RPC, bypassing the pipeline. Use HSM/KMS-backed signers in production.
+- **Malicious chain adapters** — if you supply a tampered adapter, `adapter.simulate()` can return arbitrary results. Adapter code is in the trusted zone; review it like signing code.
+- **Policy misconfiguration** — `Policy.allowedContracts: []` combined with `requireSimulation: false` is a very permissive policy. Run `validateConfig(policy)` and [`stressTest(policy)`](/docs/guides/stress-testing) before every deploy.
+- **MEV / sandwich attacks (default mode)** — standard `eth_sendRawTransaction` exposes the transaction to the public mempool. Set `Policy.mevProtection: 'flashbots'` or `'mev-blocker'` to route through protected endpoints — see [MEV Protection](/docs/guides/mev-protection).
+- **Smart contract exploits** — vulnerabilities in the contracts being called are outside txfence's scope; simulation may flag a revert but cannot detect a back-door that mints to the attacker.
 
 ## Threat Model
 
@@ -48,45 +54,56 @@ txfence operates within a specific trust model. Understanding what it does and d
 
 An attacker embeds instructions in data the agent processes (a token name, a contract's `name()` return value, a DeFi protocol's description) that cause the agent to propose malicious actions.
 
-**Mitigation**: Policy rules enforce invariants regardless of why the agent proposed the action. Even if the agent is convinced to attempt a large transfer, the `value: { lte: X }` rule blocks it.
+**Mitigation**: Policy checks are invariants regardless of why the agent proposed the action. Even if the agent is convinced to attempt a large transfer, `maxSpendPerTx`, `allowedContracts`, and `humanApprovalThreshold` enforce bounds independently of agent reasoning.
 
 ### Policy Bypass via Novel Action Encoding
 
-An attacker finds an encoding of a malicious action that the parser fails to decode correctly, causing it to appear benign to the policy engine.
+An attacker finds an encoding of a malicious action that the chain adapter mis-decodes, so it appears benign during simulation.
 
-**Mitigation**: The adapter's parser is the only trust boundary here. Review adapter code carefully. Maintain a function signature allowlist so any unrecognized call is denied by default.
+**Mitigation**: Three actions kinds exist — `transfer`, `swap`, `contract_call`. Each has explicit typed fields and an optional `calldata` override. The adapter is the only trust boundary on encoding; review adapter code carefully. For EVM, use `createEvmMetadataVerifier` and pin `ContractEntry.bytecodeHash` so a contract that changes implementation is rejected with `bytecode_hash_mismatch`.
 
 ### Simulation Divergence
 
-The simulation returns success, but the actual on-chain execution has a different outcome (due to state changes in the same block between simulation and execution).
+Simulation returns success at block N, but state changes between block N and the inclusion block produce a different on-chain outcome.
 
-**Mitigation**: This is a known limitation of all simulation-based approaches. Mitigate with slippage tolerance rules, idempotent action design, and monitoring for unexpected outcomes.
+**Mitigation**: Set `Policy.simulationStalenessMs` (e.g., 30,000 ms) — the pipeline returns `simulation_stale` if too much wall-clock time elapses between simulating and signing, forcing a re-simulate. Use [Fork Simulation](/docs/guides/fork-simulation) for multi-step intents that need state to carry between steps.
 
 ### Audit Log Tampering
 
-An attacker with write access to the audit store attempts to delete or modify historical entries.
+An attacker with write access to the audit log file attempts to delete or modify historical entries.
 
-**Mitigation**: Chain-linked SHA-256 hashes make tampering detectable. For high-assurance deployments, write audit entries to an append-only external system (e.g., a write-once S3 bucket or a public blockchain).
+**Mitigation**: Use `@txfence/provenance` instead of plain `@txfence/audit` for high-assurance deployments. Each `ProvenanceRecord` includes the SHA-256 hash of the previous record, so tampering with entry N invalidates entries N+1..end. `chain.verify()` walks the chain and reports `hash_mismatch` / `chain_broken` / `invalid_hash` violations. For external durability, mirror the chain to a write-once S3 bucket with object lock.
+
+### Behavioral Manipulation
+
+An attacker discovers that the agent's reasoning loop can be nudged into a pattern of small individually-valid actions that, taken together, drain a cap or trigger an undesired state.
+
+**Mitigation**: [Temporal rules](/docs/guides/temporal-rules) detect sliding-window patterns — `spend_velocity`, `consecutive_failures`, `contract_call_frequency`, `approval_flood`, `success_drought`, `simulation_failure_rate`. Each maps to a `require_approval`, `reject`, or `flag_for_review` consequence without requiring the agent to recognize the pattern itself.
 
 ## Key Management
 
-txfence holds the signing key for your agent's wallet. Follow these practices:
+`createAgent` accepts a `Signer` in `AgentConfig`. The signer is the most sensitive object in the system — treat it like a smart-contract owner key.
 
-1. **Use environment variables** — never hardcode private keys in policy files or source code
-2. **Use HSMs or KMS** — for production, supply an `ExternalSigner` backed by AWS KMS, GCP Cloud HSM, or a hardware wallet
-3. **Rotate keys** — if a key is suspected compromised, rotate it immediately; past audit logs remain verifiable by hash
-4. **Principle of least privilege** — fund the agent's wallet with only what it needs; keep treasury funds in a separate cold wallet
+1. **Never hardcode private keys** in source code or policy files
+2. **Use environment variables** for local development only
+3. **Use HSMs or KMS** in production — wrap your key store in a `Signer` implementation (`{ address, sign(tx): Promise<Hex> }`); the EVM package's `privateKeySigner` is reference-only, not for production
+4. **Rotate keys** if compromised — past audit and provenance entries remain verifiable by their internal hashes
+5. **Principle of least privilege** — fund the agent's wallet with only what it needs; keep treasury funds in a separate wallet and use `humanApprovalThreshold` to gate top-ups
 
 ```typescript
-import { KMSSigner } from "@txfence/evm/signers";
+import type { Signer } from "@txfence/core";
 
-const fence = createFence({
-  adapter: evmAdapter({
-    rpcUrl: process.env.RPC_URL!,
-    signer: new KMSSigner({ keyId: process.env.KMS_KEY_ID! }),
-  }),
-  policy,
-});
+const kmsSigner: Signer = {
+  address: process.env.AGENT_ADDRESS as `0x${string}`,
+  sign:    async (tx) => kmsClient.sign(tx),
+};
+
+const agent = createAgent(
+  { chains: ["ethereum"], policies: policy, signer: kmsSigner },
+  adapters,
+  rpcUrls,
+  executor,
+);
 ```
 
 ## Reporting Vulnerabilities

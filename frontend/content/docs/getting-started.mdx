@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: Install txfence and enforce your first policy in under five minutes.
+description: Install txfence and run your first policy-gated transaction in under five minutes.
 ---
 
 import { Steps, Callout, Tabs } from "nextra/components";
@@ -12,6 +12,8 @@ import { Steps, Callout, Tabs } from "nextra/components";
 </Callout>
 
 ## Installation
+
+Install `@txfence/core` plus the chain adapter you need.
 
 <Tabs items={["pnpm", "npm", "yarn"]}>
   <Tabs.Tab>
@@ -31,111 +33,125 @@ import { Steps, Callout, Tabs } from "nextra/components";
   </Tabs.Tab>
 </Tabs>
 
-## Your First Policy
+## Your first policy-gated agent
 
 <Steps>
 
 ### Define a policy
 
-Create a policy file that describes what your agent is allowed to do:
+A `Policy` is a flat typed object — no rules array, no match clauses, no default-effect.
 
 ```typescript filename="policy.ts"
-import { definePolicy } from "@txfence/core";
+import type { Policy } from "@txfence/core";
 
-export const policy = definePolicy({
-  id: "treasury-agent-v1",
-  version: "1.0.0",
-  rules: [
-    {
-      id: "max-transfer",
-      description: "No single transfer may exceed 1 ETH",
-      match: { action: "transfer" },
-      condition: { value: { lte: "1000000000000000000" } }, // 1e18 wei
-    },
-    {
-      id: "allowlist-only",
-      description: "Only transfer to pre-approved addresses",
-      match: { action: "transfer" },
-      condition: {
-        to: { in: "$allowlist" },
-      },
-    },
-    {
-      id: "no-contract-deploy",
-      description: "Agent may not deploy contracts",
-      match: { action: "deploy" },
-      effect: "deny",
-    },
-  ],
-  defaults: { effect: "deny" },
-});
+export const policy: Policy = {
+  chains:                 ["ethereum"],
+  maxSpendPerTx:          { token: "USDC", amount: 1_000n, decimals: 6 },
+  allowedContracts:       [{ address: "0xYOUR_CONTRACT", chain: "ethereum" }],
+  requireSimulation:      true,
+  gasBufferMultiplier:    1.2,
+  humanApprovalThreshold: { token: "USDC", amount: 10_000n, decimals: 6 },
+  humanApprovalTimeoutMs: 30_000,
+  capLockMode:            "per-agent",
+};
 ```
 
-### Create the fence
+Six policy checks run synchronously on every action: chain allowlist, contract allowlist, spend cap, slippage declared (swaps), simulation-required, and gas buffer. The first failing check short-circuits with a `PolicyRejectionReason`.
 
-Wrap your chain adapter with `createFence`:
+### Create the agent
 
-```typescript filename="fence.ts"
-import { createFence } from "@txfence/core";
-import { evmAdapter } from "@txfence/evm";
-import { policy } from "./policy";
-
-export const fence = createFence({
-  adapter: evmAdapter({
-    rpcUrl: process.env.RPC_URL!,
-  }),
-  policy,
-  context: {
-    allowlist: [
-      "0xRecipient1...",
-      "0xRecipient2...",
-    ],
-  },
-});
-```
-
-### Wrap your agent
-
-Pass every proposed action through the fence before execution:
+`createAgent` wires the policy, adapters, RPC endpoints, and an executor into a single instance.
 
 ```typescript filename="agent.ts"
-import { fence } from "./fence";
+import { createAgent } from "@txfence/core";
+import {
+  simulateEvmAction,
+  executeEvmAction,
+  privateKeySigner,
+} from "@txfence/evm";
+import { policy } from "./policy";
 
-async function agentLoop() {
-  const proposedAction = await agent.think();
+const signer = privateKeySigner(process.env.PRIVATE_KEY as `0x${string}`);
 
-  const result = await fence.evaluate(proposedAction);
+export const agent = createAgent(
+  { chains: ["ethereum"], policies: policy, signer },
+  { ethereum: { simulate: simulateEvmAction } },
+  { ethereum: "https://ethereum.publicnode.com" },
+  (action, chainId, rpcUrl, evaluation, simulation) =>
+    executeEvmAction(action, chainId, rpcUrl, signer, evaluation, simulation),
+);
+```
 
-  if (result.allowed) {
-    await fence.execute(proposedAction); // executes on-chain
-  } else {
-    console.log("Blocked:", result.violations);
-  }
+### Submit an action
+
+Every proposed action goes through `agent.submit({ action, policy })`. The pipeline runs policy evaluation → temporal rules → simulation → staleness check → cap lock → approval → execution.
+
+```typescript filename="run.ts"
+import { agent } from "./agent";
+import { policy } from "./policy";
+import type { Action } from "@txfence/core";
+
+const action: Action = {
+  kind:  "transfer",
+  chain: "ethereum",
+  token: { token: "ETH", amount: 100_000_000_000_000_000n, decimals: 18 },
+  to:    "0xRECIPIENT",
+};
+
+const result = await agent.submit({ action, policy });
+
+switch (result.status) {
+  case "success":
+    console.log("tx hash:", result.receipt.txHash);
+    break;
+  case "policy_rejected":
+    console.log("rejected:", result.evaluation.rejectionReason);
+    break;
+  case "simulation_failed":
+    console.log("simulation failed:", result.simulation.revertReason);
+    break;
+  case "simulation_stale":
+    console.log("simulation stale by", result.stalenessMs, "ms — retry");
+    break;
+  case "approval_timeout":
+    console.log("human approval timed out — cancel-on-timeout is the default");
+    break;
+  case "execution_failed":
+    console.log("execution failed:", result.reason.code);
+    break;
 }
 ```
 
-### Run it
+`ExecutionResult` is a discriminated union — TypeScript forces you to handle every outcome.
+
+### Test without broadcasting
+
+Use `agent.dryRun()` to walk the pipeline without sending the transaction. Cap locks are acquired then immediately released, so the dry run never consumes budget.
 
 ```bash
-npx ts-node agent.ts
+# CLI equivalent — exits 1 if anything would block
+npx txfence dry-run --kind transfer --chain ethereum --to 0xRECIPIENT \
+  --token ETH --amount 100000000000000000
 ```
 
 </Steps>
 
-## What Just Happened?
+## What happens inside `submit()`
 
-When `fence.evaluate()` is called, txfence runs the proposed action through a **five-stage pipeline**:
+The pipeline runs through ordered stages, short-circuiting on the first blocker:
 
-1. **Parse** — decode the raw action into a normalized `ActionIntent`
-2. **Simulate** — dry-run against a forked chain state (no gas spent)
-3. **Evaluate** — test every policy rule in order; first match wins
-4. **Audit** — write a tamper-evident log entry regardless of outcome
-5. **Execute** — submit to the chain only if all rules pass
-
-If any rule returns `deny`, execution is halted and `result.allowed` is `false`.
+1. **Policy evaluation** — six static checks against action + policy
+2. **Temporal rules** — sliding-window predicates over recent pipeline events (only if `policy.temporalRules` and an `EventStore` are configured)
+3. **Simulation** — `adapter.simulate()` returns gas estimate, revert prediction, and caveats
+4. **Staleness check** — if `policy.simulationStalenessMs` is set, reject if simulation is too old
+5. **Cap lock acquire** — two-phase reservation against the per-agent or shared cap
+6. **Human approval** — webhook dispatch + poll, when action value ≥ `humanApprovalThreshold`
+7. **Execution** — `executor` signs and broadcasts
+8. **Cap lock commit / release** — depending on outcome
 
 ## Next Steps
 
-- [Core Concepts](/docs/core-concepts) — understand the policy object, action types, and pipeline stages
-- [API Reference](/docs/api-reference) — full type signatures for every package
-- [Architecture](/docs/architecture) — how the pipeline works under the hood
+- [Core Concepts](/docs/core-concepts) — Policy object, Action types, pipeline stages
+- [Guides](/docs/guides) — 20 walkthroughs covering every feature (composite policies, intent execution, MEV protection, formal verification, …)
+- [API Reference](/docs/api-reference) — typed signatures for every package
+- [Architecture](/docs/architecture) — how the pipeline is structured internally

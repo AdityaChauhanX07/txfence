@@ -1,50 +1,59 @@
 ---
 title: txfence Documentation
-description: Policy enforcement SDK for autonomous agents on EVM, Solana, and Cosmos chains.
+description: The fence between what an autonomous agent wants to do and what it does on-chain. Policy, simulation, cap locking, and audit primitives for EVM, Solana, and Cosmos.
 ---
 
 import { Cards } from "nextra/components";
 
 # txfence
 
-**txfence** is a policy enforcement SDK for autonomous agents. It sits between your agent's decision-making layer and the blockchain, intercepting every action and evaluating it against your declared policies before execution.
+**txfence** is a typed, composable policy-and-execution SDK for autonomous agents on EVM, Solana, and Cosmos. It sits between your agent's decision-making layer and the chain — every action passes through a strict pipeline (policy check, temporal rules, simulation, approval, cap lock, execution) before a signed transaction is broadcast.
 
-No more runaway agents. No more unintended transactions.
+No more runaway agents. No more execute-on-timeout. No more silent cap drains.
 
 ## Packages
 
-| Package | Description |
+| Package | Purpose |
 |---|---|
-| `@txfence/core` | Policy engine and pipeline runner |
-| `@txfence/evm` | EVM chain adapter (Ethereum, Polygon, Arbitrum, Base…) |
-| `@txfence/solana` | Solana adapter with SPL token support |
-| `@txfence/cosmos` | Cosmos SDK / IBC adapter |
-| `@txfence/policy-dsl` | Human-readable policy language |
-| `@txfence/simulate` | Dry-run simulation without on-chain state |
-| `@txfence/audit-log` | Tamper-evident structured audit trail |
-| `@txfence/rate-limiter` | Token/value rate limits with sliding windows |
-| `@txfence/allowlist` | Address and contract allowlist/denylist |
-| `@txfence/multisig` | Require N-of-M approvals for high-value actions |
-| `@txfence/circuit-breaker` | Halt execution on anomaly detection |
-| `@txfence/monitor` | Real-time telemetry and alerting hooks |
+| `@txfence/core`           | Policy engine, pipeline runner, cap locks, dry-run, intent execution, temporal rules, registry, replay |
+| `@txfence/evm`            | EVM chain adapter — Ethereum, Arbitrum, Optimism, Base — with Tenderly simulation, fork API, MEV protection |
+| `@txfence/solana`         | Solana adapter — simulate, build, sign, broadcast |
+| `@txfence/cosmos`         | Cosmos SDK adapter — Cosmos Hub, Osmosis |
+| `@txfence/redis`          | Redis-backed `CapLockProvider` with atomic Lua scripts for multi-agent deployments |
+| `@txfence/storage-pg`     | PostgreSQL `ReceiptStore` |
+| `@txfence/storage-sqlite` | SQLite `ReceiptStore` for local dev and single-process staging |
+| `@txfence/audit`          | Append-only NDJSON audit log capturing every decision |
+| `@txfence/monitor`        | On-chain reconciliation monitor — detects unrecorded transactions and chain reorgs |
+| `@txfence/verify`         | Formal verification + adversarial stress testing against your policy |
+| `@txfence/provenance`     | Cryptographic provenance chains — hash chaining + Merkle proofs |
+| `@txfence/mcp`            | MCP server exposing txfence as tools for AI assistants |
+| `@txfence/cli`            | Command-line interface — 13 commands for simulate / submit / diff / verify / replay / intent / provenance |
+| `@txfence/react`          | React hooks — `useAgent`, `useSubmit`, `useSimulate`, `useReceipt`, `useDryRun`, `useIntentSubmit`, `useAgentHealth` |
 
 ## Quick Links
 
 <Cards>
   <Cards.Card title="Getting Started" href="/docs/getting-started" arrow />
-  <Cards.Card title="Core Concepts" href="/docs/core-concepts" arrow />
-  <Cards.Card title="API Reference" href="/docs/api-reference" arrow />
-  <Cards.Card title="Architecture" href="/docs/architecture" arrow />
+  <Cards.Card title="Core Concepts"   href="/docs/core-concepts"   arrow />
+  <Cards.Card title="Guides"          href="/docs/guides"          arrow />
+  <Cards.Card title="API Reference"   href="/docs/api-reference"   arrow />
+  <Cards.Card title="Architecture"    href="/docs/architecture"    arrow />
 </Cards>
 
-## Why txfence?
+## Why txfence
 
-Autonomous agents execute transactions faster than humans can review them. A single misconfigured agent can drain a treasury, bypass access controls, or trigger cascading failures across DeFi protocols in seconds.
+Autonomous agents execute transactions faster than humans can review them. A single misconfigured agent can drain a treasury, bypass intent, or trigger cascading failures in seconds — and crucially, they don't fail because of bugs or hacks, they fail because **the conditions at execution time were different from the conditions when the instructions were written**. State moved. A contract was upgraded. Two agents read the same cap simultaneously. A human approval timed out and the system defaulted to execute.
 
-txfence gives you:
+These are policy failures, not security failures. txfence is the policy layer.
 
-- **Declarative policies** — define intent once, enforce everywhere
-- **Chain-agnostic pipeline** — same policy syntax across EVM, Solana, and Cosmos
-- **Zero-overhead simulation** — validate every action before it hits the chain
-- **Tamper-evident audit logs** — full trace of every decision, pass or fail
-- **Circuit breakers** — automatic halt on anomaly detection
+What you get:
+
+- **Flat typed `Policy`** — `chains`, `maxSpendPerTx`, `allowedContracts`, `gasBufferMultiplier`, `humanApprovalThreshold`, plus optional MEV protection, temporal rules, and simulation staleness checks
+- **Composite policies** — AND/OR trees so a treasury can require small-spend OR large-spend-with-approval, AND always pass the allowlist
+- **Two-phase cap locking** — atomic acquire / commit / release across agents (single-process via memory, multi-process via Redis)
+- **Temporal rules** — sliding-window detection for spend velocity, simulation failure rate, approval floods, contract-call frequency, and four more
+- **Intent-level DAG execution** — declare multi-step operations with dependencies; partial-failure handling is built in
+- **Formal verification** — bounded model checking with counterexample generation for cap-saturation and policy-containment properties
+- **Adversarial stress testing** — six attack vectors (rapid_fire, coordinated_drain, rpc_failure, stale_simulation, cap_boundary, approval_flood) run against your policy on every deploy
+- **Cryptographic provenance** — every decision hash-chained with Merkle proofs for tamper-evident compliance trails
+- **Webhook approval** — HMAC-signed POSTs with one-click approve/reject URLs; cancel-on-timeout is the hard default

@@ -12,29 +12,40 @@ txfence is TypeScript-first. Every function, type, and interface is fully typed.
 ## Packages
 
 <Cards>
-  <Cards.Card title="@txfence/core" href="/docs/api-reference/core" arrow />
-  <Cards.Card title="@txfence/evm" href="/docs/api-reference/evm" arrow />
-  <Cards.Card title="@txfence/solana" href="/docs/api-reference/solana" arrow />
-  <Cards.Card title="@txfence/cosmos" href="/docs/api-reference/cosmos" arrow />
-  <Cards.Card title="@txfence/mcp" href="/docs/api-reference/mcp" arrow />
-  <Cards.Card title="@txfence/cli" href="/docs/api-reference/cli" arrow />
-  <Cards.Card title="@txfence/react" href="/docs/api-reference/react" arrow />
+  <Cards.Card title="@txfence/core"            href="/docs/api-reference/core"            arrow />
+  <Cards.Card title="@txfence/evm"             href="/docs/api-reference/evm"             arrow />
+  <Cards.Card title="@txfence/solana"          href="/docs/api-reference/solana"          arrow />
+  <Cards.Card title="@txfence/cosmos"          href="/docs/api-reference/cosmos"          arrow />
+  <Cards.Card title="@txfence/redis"           href="/docs/api-reference/redis"           arrow />
+  <Cards.Card title="@txfence/storage-pg"      href="/docs/api-reference/storage-pg"      arrow />
+  <Cards.Card title="@txfence/storage-sqlite"  href="/docs/api-reference/storage-sqlite"  arrow />
+  <Cards.Card title="@txfence/audit"           href="/docs/api-reference/audit"           arrow />
+  <Cards.Card title="@txfence/monitor"         href="/docs/api-reference/monitor"         arrow />
+  <Cards.Card title="@txfence/verify"          href="/docs/api-reference/verify"          arrow />
+  <Cards.Card title="@txfence/provenance"      href="/docs/api-reference/provenance"      arrow />
+  <Cards.Card title="@txfence/mcp"             href="/docs/api-reference/mcp"             arrow />
+  <Cards.Card title="@txfence/cli"             href="/docs/api-reference/cli"             arrow />
+  <Cards.Card title="@txfence/react"           href="/docs/api-reference/react"           arrow />
 </Cards>
 
 ## Package overview
 
 | Package | Install | Purpose |
 |---|---|---|
-| `@txfence/core` | Required | Policy engine, pipeline runner, interfaces |
-| `@txfence/evm` | + 1 chain adapter | EVM adapter (Ethereum, Arbitrum, Optimism, Base) |
-| `@txfence/solana` | + 1 chain adapter | Solana adapter with SPL token support |
-| `@txfence/cosmos` | + 1 chain adapter | Cosmos SDK adapter (cosmoshub-4, osmosis-1) |
-| `@txfence/redis` | Optional | Distributed cap locking across processes |
-| `@txfence/mcp` | Optional | MCP server for AI assistant integration |
-| `@txfence/cli` | Optional | CLI for simulation, policy checking, and diffs |
-| `@txfence/react` | Optional | React hooks for frontend integration |
-| `@txfence/audit` | Optional | Append-only compliance audit log |
-| `@txfence/monitor` | Optional | On-chain reconciliation and alert monitor |
+| `@txfence/core`            | Required          | Policy engine, pipeline runner, interfaces |
+| `@txfence/evm`             | + 1 chain adapter | EVM adapter (Ethereum, Arbitrum, Optimism, Base) |
+| `@txfence/solana`          | + 1 chain adapter | Solana adapter with SPL token support |
+| `@txfence/cosmos`          | + 1 chain adapter | Cosmos SDK adapter (cosmoshub-4, osmosis-1) |
+| `@txfence/redis`           | Optional          | Distributed cap locking across processes |
+| `@txfence/storage-pg`      | Optional          | PostgreSQL receipt storage |
+| `@txfence/storage-sqlite`  | Optional          | SQLite receipt storage for local dev |
+| `@txfence/audit`           | Optional          | Append-only compliance audit log |
+| `@txfence/monitor`         | Optional          | On-chain reconciliation and alert monitor |
+| `@txfence/verify`          | Optional          | Formal verification + adversarial stress testing |
+| `@txfence/provenance`      | Optional          | Cryptographic hash-chained provenance + Merkle proofs |
+| `@txfence/mcp`             | Optional          | MCP server for AI assistant integration |
+| `@txfence/cli`             | Optional          | CLI for simulation, policy checking, and diffs |
+| `@txfence/react`           | Optional          | React hooks for frontend integration |
 
 ## TypeScript design
 

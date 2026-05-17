@@ -1,132 +1,119 @@
 ---
 title: Architecture
-description: How txfence's five-stage pipeline and plugin system are structured internally.
+description: How txfence's pipeline, agent state, and pluggable providers are structured internally.
 ---
 
 # Architecture
 
 ## Overview
 
-txfence is structured as a **middleware pipeline** that sits between your agent and the blockchain. Every action proposal flows through a fixed sequence of stages before it is allowed to touch chain state.
+txfence is structured around a single function — `runPipeline` — that takes an action plus a policy and returns a discriminated `ExecutionResult`. Everything else in the SDK is either a typed input (`Policy`, `Action`, `AdapterMap`) or a pluggable provider (`CapLockProvider`, `ApprovalProvider`, `ReceiptStore`, `AuditLog`, `TelemetryProvider`, `NotificationProvider`, `EventStore`, `ProvenanceChain`) injected as optional arguments.
+
+`createAgent` is a thin wrapper that closes over those providers, maintains in-flight/shutdown state, and exposes `submit`, `dryRun`, `executeIntent`, `shutdown`, `health`, and `isShuttingDown` methods.
 
 import Image from 'next/image'
 
 <Image
   src="/images/pipeline-architecture.svg"
-  alt="txfence pipeline architecture — agent action flows through parse, simulate, evaluate, audit, and execute stages inside the fence before reaching the chain"
+  alt="txfence pipeline architecture — agent action flows through policy evaluation, temporal rules, simulation, staleness check, cap lock, approval, and execution stages inside runPipeline before a signed transaction is broadcast"
   width={680}
   height={280}
   style={{ width: '100%', height: 'auto' }}
 />
 
-## Stage Details
+## Pipeline stages
 
-### Parse
+`runPipeline` walks eight stages, short-circuiting on the first blocker:
 
-The raw action — an unsigned transaction object, a Solana instruction, or a Cosmos `Any` message — is decoded by the **chain adapter** into a normalized `ActionIntent`. This is the canonical representation the rest of the pipeline works with.
+### 1. Policy evaluation
 
-Each adapter knows how to:
-- Decode calldata using the contract's ABI
-- Resolve token addresses to human-readable symbols
-- Normalize value fields to base units (wei, lamports, uatom)
+The flat `Policy` object is evaluated against the action via `evaluate(policy, action, simulationResult?)`. Six checks run in order: `chains` allowlist, `allowedContracts`, `maxSpendPerTx`, slippage declared (swaps only), simulation-required (when set), and `gasBufferMultiplier`. The first failing check produces a `PolicyRejectionReason` and the pipeline returns `{ status: 'policy_rejected', ... }`.
 
-### Simulate
+If a `policyNode` (composite AND/OR tree) is configured, `evaluateNode()` is used instead — same six checks, run per leaf, with tree-aware aggregation.
 
-The normalized action is executed against a **forked snapshot** of the current chain state. The fork is created by the adapter using the RPC's debug/tracing APIs (e.g., `eth_call` with state overrides on EVM, `simulateTransaction` on Solana).
+### 2. Temporal rules
 
-Simulation surfaces:
-- Whether the transaction would revert and why
-- The gas estimate
-- All state changes (balance diffs, storage writes, event logs)
-- Downstream effects (e.g., a DEX swap producing slippage)
+If the policy has `temporalRules` AND an `EventStore` is wired in, `evaluateTemporalRules()` runs against the recent event window. Six predicate kinds — `simulation_failure_rate`, `contract_call_frequency`, `success_drought`, `spend_velocity`, `consecutive_failures`, `approval_flood` — produce one of three consequences: `require_approval`, `reject`, or `flag_for_review`.
 
-Policy conditions can reference simulation results, enabling rules like "deny if gas estimate exceeds 500k" or "deny if the swap produces more than 5% slippage."
+### 3. Simulation
 
-### Evaluate
+The chain adapter's `simulate(action, chainId, rpcUrl, options?)` is called. The result includes `gas`, `coverageLevel` (`basic` for `eth_call`, `deep` for Tenderly), `wouldRevert`, `revertReason`, and `caveats`. A timestamp (`simulatedAt`) is recorded for the next stage.
 
-The policy engine walks `policy.rules` in order. For each rule:
+### 4. Staleness check
 
-1. The `match` clause is tested against the `ActionIntent` type fields
-2. If the match passes, the `condition` is evaluated against the full context (action + simulation + user-supplied context variables)
-3. If the condition passes, the rule's `effect` is applied and evaluation stops
+If `policy.simulationStalenessMs` is set, the pipeline computes `Date.now() - simulatedAt` and returns `{ status: 'simulation_stale', stalenessMs }` if it exceeds the threshold. The caller is expected to re-simulate before retrying.
 
-If no rule matches, `policy.defaults.effect` is applied.
+### 5. Cap lock acquire
 
-The engine is **pure** — it takes inputs and returns a result with no side effects. This makes it easy to unit-test policies in isolation:
+If a `CapLockProvider` is configured, `provider.acquire(capId, amount, token)` is called. Returns `{ granted: true, lockId }` or `{ granted: false, reason: 'absolute_cap_exceeded' | 'rolling_window_exceeded' }`. The pipeline holds the `lockId` for the rest of the run.
 
-```typescript
-import { evaluatePolicy } from "@txfence/core/eval";
+### 6. Human approval
 
-const result = evaluatePolicy(policy, actionIntent, context);
-expect(result.allowed).toBe(false);
-```
+If the action's value ≥ `humanApprovalThreshold`, `ApprovalProvider.request()` dispatches the approval (typically a webhook POST with HMAC signature), then `provider.poll(token)` is called every 50 ms until decision or `humanApprovalTimeoutMs` expires. Cancel-on-timeout is the hard default — timeout returns `{ status: 'approval_timeout' }`, never falls through to execute.
 
-### Audit
+### 7. Execution
 
-An `AuditEntry` is written to the configured store after every evaluation. Entries are **chain-linked** — each entry includes the SHA-256 hash of the previous entry — so any tampering with a historical entry invalidates all subsequent entries.
+The user-supplied `executor` callback is invoked with `(action, chainId, rpcUrl, evaluation, simulation)` and is responsible for signing and broadcasting. The chain-specific helpers `executeEvmAction` / `executeSolanaAction` / `executeCosmosAction` are the standard implementations. On success the executor returns a `SuccessReceipt`.
 
-The default store is in-memory. For production use, configure the `fs` store (append-only NDJSON file) or implement the `AuditStore` interface to write to a database or external logging service.
+### 8. Cap lock commit / release
 
-### Execute
+On success, `provider.commit(capId, lockId, amount)` records the spend. On any failure (policy reject, simulation failure, approval timeout, execution throw), `provider.release(capId, lockId, amount)` returns the reservation. This is what makes the cap lock two-phase.
 
-If `allowed === true`, the fence calls `adapter.submit(signedTx)`. The adapter handles:
-- Signing with the configured key or external signer
-- Nonce management and gas estimation
-- Retry logic on transient RPC failures
-- Transaction receipt polling
+Throughout, every stage emits spans through the optional `TelemetryProvider`, fires events via the `NotificationProvider`, writes to the `AuditLog`, and appends to the `ProvenanceChain` — all errors in those providers are swallowed so observability failures never crash the pipeline.
 
-The resulting transaction hash is appended to the audit entry.
+## Pluggable providers
 
-## Plugin System
+Every long-lived dependency is an interface, not a concrete implementation. The default `createMemoryX()` factories are good for single-process dev; production typically swaps them out for Redis, PostgreSQL, or your own infrastructure.
 
-Plugins extend the pipeline by registering **hooks** at specific stages:
+| Interface | Memory impl | Production impl |
+|---|---|---|
+| `CapLockProvider`      | `createMemoryCapLockProvider`    | `@txfence/redis` |
+| `ReceiptStore`         | `createMemoryReceiptStore`       | `@txfence/storage-pg`, `@txfence/storage-sqlite` |
+| `AuditLog`             | `createMemoryAuditLog`           | `createFileAuditLog` (NDJSON), or your own |
+| `ApprovalProvider`     | `createMemoryApprovalProvider`   | `createWebhookApprovalProvider` |
+| `ProvenanceChain`      | `createMemoryProvenanceChain`    | `createFileProvenanceChain` |
+| `EventStore`           | `createMemoryEventStore`         | (Redis impl planned) |
+| `TelemetryProvider`    | `noopTelemetry`                  | Wrap any OpenTelemetry tracer |
+| `NotificationProvider` | console / composite              | `createWebhookNotificationProvider` |
 
-```typescript
-interface Plugin {
-  name: string;
-  onParse?: (intent: ActionIntent) => ActionIntent | Promise<ActionIntent>;
-  onSimulate?: (result: SimulationResult) => SimulationResult | Promise<SimulationResult>;
-  onEvaluate?: (result: EvalResult) => EvalResult | Promise<EvalResult>;
-  onAudit?: (entry: AuditEntry) => void | Promise<void>;
-  onExecute?: (receipt: TransactionReceipt) => void | Promise<void>;
-}
-```
+Contract test suites (`receiptStoreContract`, `capLockProviderContract`, `auditLogContract`, `approvalProviderContract`) are exported from `@txfence/core/contracts` so any new implementation can verify substitutability.
 
-Built-in plugins (`@txfence/rate-limiter`, `@txfence/allowlist`, `@txfence/circuit-breaker`, `@txfence/multisig`) all use the `onEvaluate` hook to inject additional deny decisions into the result.
+## Chain adapters
 
-Plugins are applied in the order they are passed to `createFence`:
+The `ChainAdapter` interface is minimal — `{ simulate(action, chainId, rpcUrl, options?) }`. Execution lives outside the adapter, in the user-supplied `executor` callback, so signing keys never cross the pipeline boundary.
 
 ```typescript
-const fence = createFence({
-  adapter,
-  policy,
-  plugins: [
-    rateLimiter({ windows: [{ duration: 3600_000, maxValue: 10n ** 19n }] }),
-    circuitBreaker({ tripOn: [{ consecutiveFailures: 3 }] }),
-    allowlist({ addresses: APPROVED }),
-  ],
-});
+type ChainAdapter = {
+  simulate: (
+    action: Action,
+    chainId: ChainId,
+    rpcUrl: string,
+    options?: SimulateOptions,
+  ) => Promise<SimulationResult>;
+};
 ```
 
-## Chain Adapters
+`createMultiChainAdapter(adapters)` wraps an `AdapterMap` (`{ ethereum: { simulate }, arbitrum: { simulate }, … }`) into a single adapter that dispatches by `action.chain` — useful when a downstream API expects one adapter.
 
-Adapters implement the `ChainAdapter` interface:
+You can implement a custom adapter for any chain or simulator (e.g., a local Anvil fork for tests).
 
-```typescript
-interface ChainAdapter {
-  chain: ChainId;
-  parse(raw: RawAction): Promise<ActionIntent>;
-  simulate(intent: ActionIntent): Promise<SimulationResult>;
-  submit(intent: ActionIntent): Promise<TransactionReceipt>;
-}
-```
+## Agent state
 
-You can implement a custom adapter for any chain or execution environment (e.g., a local Hardhat node for testing).
+`createAgent` adds a small state machine around the pipeline:
 
-## Deployment Topologies
+- An `inFlight` counter, incremented on `submit()` entry and decremented in `finally`
+- A `shuttingDown` flag, flipped by `shutdown()` to refuse new submissions
+- A `startedAt` timestamp for `health().uptime`
+- A reference to `capLockConfigs` for `shutdown()` to inspect outstanding locks
 
-**In-process** (default): The fence runs in the same Node.js process as the agent. Zero network latency, suitable for most use cases.
+`shutdown(timeoutMs)` sets `shuttingDown = true`, polls every 50 ms until `inFlight === 0` or the deadline expires, then inspects cap locks (when `capLockProvider.inspect` is implemented) and returns `{ completed, abandoned, capLocksReleased }`.
 
-**Sidecar**: Run `@txfence/server` as a separate process and call it over HTTP/gRPC. Useful when the agent is written in a language other than JavaScript.
+## Deployment topologies
 
-**Proxy**: Route raw RPC calls through `@txfence/proxy`, which intercepts `eth_sendRawTransaction` and evaluates the policy before forwarding. Requires no changes to the agent's code.
+**In-process** (default). The agent runs in the same Node.js process as your trading/treasury logic. Zero network latency. Use `createMemoryCapLockProvider` and friends.
+
+**Multi-process, single host.** Multiple Node.js processes coordinate via Redis. Swap the cap-lock provider for `createRedisCapLockProvider` (atomic Lua scripts), and the receipt store for `@txfence/storage-pg` or `@txfence/storage-sqlite`.
+
+**Multi-host.** Same as multi-process, plus the audit log goes to a write-once backend (S3 with object lock, or `createFileProvenanceChain` on shared NFS) and the monitor (`@txfence/monitor`) runs as its own process watching block streams.
+
+**AI-assistant frontend.** The MCP server (`@txfence/mcp`) exposes `txfence_simulate`, `txfence_check_policy`, `txfence_submit`, `txfence_execute_intent`, `txfence_diff_policies`, `txfence_replay_audit_log`, and seven more as MCP tools. AI assistants get a typed interface to the same pipeline.

@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  zod: 4.3.6
+
 importers:
 
   .:
@@ -42,8 +45,8 @@ importers:
         specifier: ^4.0.0
         version: 4.3.0
       zod:
-        specifier: ^4.1.12
-        version: 4.4.3
+        specifier: 4.3.6
+        version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -2074,8 +2077,8 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
-  zod@4.4.3:
-    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
 
   zustand@5.0.13:
     resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
@@ -4025,7 +4028,7 @@ snapshots:
       react-compiler-runtime: 19.1.0-rc.1-rc-af1b7da-20250421(react@19.2.6)
       react-dom: 19.2.6(react@19.2.6)
       scroll-into-view-if-needed: 3.1.0
-      zod: 4.4.3
+      zod: 4.3.6
       zustand: 5.0.13(@types/react@19.2.14)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
     transitivePeerDependencies:
       - '@types/react'
@@ -4075,7 +4078,7 @@ snapshots:
       unist-util-visit: 5.1.0
       unist-util-visit-children: 3.0.0
       yaml: 2.9.0
-      zod: 4.4.3
+      zod: 4.3.6
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -4649,7 +4652,7 @@ snapshots:
 
   yaml@2.9.0: {}
 
-  zod@4.4.3: {}
+  zod@4.3.6: {}
 
   zustand@5.0.13(@types/react@19.2.14)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6)):
     optionalDependencies:
