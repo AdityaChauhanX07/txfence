@@ -24,12 +24,22 @@ Creates a stable agent instance memoized for the component lifetime.
 </Callout>
 
 ```typescript
-function useAgent(config: {
-  config:   AgentConfig
-  adapters: ChainAdapters
-  rpcUrls:  Record<ChainId, string>
-  executor: Executor
-}): Agent
+type UseAgentOptions = {
+  config:            AgentConfig
+  adapters:          AdapterMap
+  rpcUrls:           Partial<Record<ChainId, string>>
+  executor?:         (
+    action: Action,
+    chainId: ChainId,
+    rpcUrl: string,
+    evaluation: PolicyEvaluation,
+    simulation: SimulationResult,
+  ) => Promise<SuccessReceipt>
+  capLockProvider?:  CapLockProvider
+  metadataVerifier?: MetadataVerifier
+}
+
+function useAgent(options: UseAgentOptions): Agent
 ```
 
 ```tsx
@@ -62,9 +72,10 @@ Wraps the full pipeline with loading, result, and error state.
 ```typescript
 function useSubmit(agent: Agent): {
   submit:  (action: Action, policy: Policy) => Promise<void>
+  reset:   () => void
   result:  ExecutionResult | null
   loading: boolean
-  error:   Error | null
+  error:   string | null
 }
 ```
 
@@ -87,52 +98,65 @@ function TransferButton() {
 
 ## useSimulate
 
-Wraps adapter simulation with loading, result, and error state.
+Wraps adapter simulation with loading, result, and error state. Takes adapters and rpcUrls directly — does **not** take an `Agent`, since simulation does not need the full pipeline.
 
 ```typescript
-function useSimulate(agent: Agent): {
-  simulate: (action: Action) => Promise<void>
+function useSimulate(
+  adapters: AdapterMap,
+  rpcUrls:  Partial<Record<ChainId, string>>,
+): {
+  simulate: (action: Action, rpcUrl?: string) => Promise<void>   // rpcUrl optional — overrides rpcUrls[action.chain]
+  reset:    () => void
   result:   SimulationResult | null
   loading:  boolean
-  error:    Error | null
+  error:    string | null                                         // error messages are strings, not Error instances
 }
 ```
 
 ```tsx
 function SimulationPreview({ action }: { action: Action }) {
-  const agent = useAgent({ config, adapters, rpcUrls, executor })
-  const { simulate, result, loading } = useSimulate(agent)
+  const { simulate, result, loading } = useSimulate(
+    { ethereum: { simulate: simulateEvmAction } },
+    { ethereum: 'https://ethereum.publicnode.com' },
+  )
 
   useEffect(() => { simulate(action) }, [action])
 
   if (loading) return <span>simulating...</span>
   if (result?.wouldRevert) return <span>would revert: {result.revertReason}</span>
-  return <span>gas estimate: {result?.gas?.toLocaleString()}</span>
+  return <span>gas estimate: {result?.gasEstimate?.toLocaleString()}</span>
 }
 ```
 
 ## useReceipt
 
-Polls for a transaction receipt using a caller-supplied chain-specific fetcher.
+Fetches a transaction receipt using a caller-supplied chain-specific fetcher. The hook runs once when all four arguments are non-null and supports cancellation if the inputs change while a fetch is in flight.
 
 ```typescript
 function useReceipt(
   txHash:  string | null,
-  fetcher: (txHash: string) => Promise<SuccessReceipt | null>,
-  options?: { pollIntervalMs?: number }
+  chain:   ChainId | null,
+  rpcUrl:  string | null,
+  fetcher: ((txHash: string, chain: ChainId, rpcUrl: string) => Promise<SuccessReceipt>) | null,
 ): {
   receipt: SuccessReceipt | null
   loading: boolean
-  error:   Error | null
+  error:   string | null
 }
 ```
 
+The fetcher receives `(txHash, chain, rpcUrl)` — keep it chain-agnostic so the same hook works for EVM, Solana, and Cosmos receipts.
+
 ```tsx
-function ReceiptStatus({ txHash }: { txHash: string }) {
-  const { receipt, loading } = useReceipt(txHash, fetchEvmReceipt)
+function ReceiptStatus({ txHash, chain, rpcUrl }: {
+  txHash: string
+  chain: ChainId
+  rpcUrl: string
+}) {
+  const { receipt, loading } = useReceipt(txHash, chain, rpcUrl, fetchEvmReceipt)
 
   if (loading) return <span>waiting for confirmation...</span>
-  if (receipt) return <span>confirmed in block {receipt.blockNumber.toString()}</span>
+  if (receipt) return <span>confirmed in block {receipt.confirmedAtBlock}</span>
   return null
 }
 ```
@@ -144,9 +168,10 @@ Wraps `agent.dryRun()` with loading and result state.
 ```typescript
 function useDryRun(agent: Agent): {
   dryRun:  (action: Action, policy: Policy) => Promise<void>
+  reset:   () => void
   result:  DryRunResult | null
   loading: boolean
-  error:   Error | null
+  error:   string | null
 }
 ```
 
@@ -170,10 +195,11 @@ Wraps `agent.executeIntent()` with loading, result, and error state.
 
 ```typescript
 function useIntentSubmit(agent: Agent): {
-  executeIntent: (intent: Intent, options?: { dryRun?: boolean }) => Promise<void>
+  executeIntent: (intent: Intent) => Promise<void>
+  reset:         () => void
   result:        IntentExecutionResult | null
   loading:       boolean
-  error:         Error | null
+  error:         string | null
 }
 ```
 

@@ -1,7 +1,9 @@
 {
   "dry-run": "Dry Run Mode",
   "composite-policies": "Composite Policies",
+  "chain-agnostic-policy": "Chain-Agnostic Policy",
   "policy-versioning": "Policy Versioning",
+  "policy-diff": "Policy Diff",
   "config-validation": "Config Validation",
   "audit-log": "Audit Log",
   "provenance-chains": "Provenance Chains",

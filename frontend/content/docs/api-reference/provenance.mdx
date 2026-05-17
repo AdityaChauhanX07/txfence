@@ -90,3 +90,31 @@ txfence provenance proof --chain ./provenance.jsonl --hash <entryHash>
 ```
 
 Exit 0 when valid, 1 when invalid — CI-friendly.
+
+## Low-level utilities
+
+If you're building custom storage or verification on top of provenance records, the underlying primitives are exported directly:
+
+```typescript
+import {
+  computeEntryHash,
+  GENESIS_HASH,
+  buildMerkleTree,
+  getMerkleRoot,
+  generateMerkleProof,
+  verifyMerkleProof,
+} from '@txfence/provenance'
+
+// Hash chaining
+const hash = computeEntryHash(previousHash, record)   // SHA-256 of canonical JSON
+console.log(GENESIS_HASH)                              // '0'.repeat(64) — the first link
+
+// Merkle tree
+const tree   = buildMerkleTree(leafHashes)             // standard binary tree, odd-leaf duplication
+const root   = getMerkleRoot(leafHashes)               // commits to all entries
+const proof  = generateMerkleProof(leafHashes, targetHash)  // O(log n) inclusion proof
+const valid  = verifyMerkleProof(proof)                // synchronous boolean
+```
+
+Canonical JSON sorts keys and stringifies bigints so the hash is deterministic across language implementations.
+

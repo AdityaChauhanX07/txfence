@@ -90,6 +90,37 @@ const poisoned = getPoisonedSteps('withdraw', intent.steps)
 
 When `requireAllSteps: true`, any step failure aborts the entire intent.
 
+## Position analysis
+
+Before execution, you can inspect what an intent will spend, hold intermediately, and net out to. The pipeline runs this analysis automatically — these helpers expose it for custom tooling.
+
+```typescript
+import {
+  analyzeIntentPosition,
+  getActionPositionChanges,
+  mergePositionChanges,
+  isSingleTokenIntent,
+  getDominantToken,
+} from '@txfence/core'
+
+const plan      = validateIntentGraph(intent).executionPlan
+const analysis  = analyzeIntentPosition(intent.steps, plan)
+
+console.log(analysis.totalGrossOutflow)       // total outflow across all steps
+console.log(analysis.netChange)               // PositionChange[] — net delta per token
+console.log(analysis.maxIntermediateExposure) // peak exposure during execution
+console.log(analysis.isSingleToken)           // true when all steps use one token
+console.log(analysis.dominantToken)           // the dominant token symbol, if any
+
+// Per-action position deltas — useful when building bespoke evaluators
+getActionPositionChanges(action)
+mergePositionChanges([{ token: 'USDC', amount: 100n, chain: 'ethereum' }, ...])
+isSingleTokenIntent(intent.steps)
+getDominantToken(intent.steps)
+```
+
+`maxTotalGrossSpend` and `maxNetSpend` enforcement uses `isSingleTokenIntent` internally — multi-token intents skip those checks until a price oracle is added in v2.
+
 ## IntentPolicy constraints
 
 ```typescript

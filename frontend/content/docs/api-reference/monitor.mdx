@@ -46,6 +46,16 @@ const monitor = createMonitor({
 await monitor.start()
 ```
 
+## Callback handlers
+
+| Field | Required | Fires when |
+|---|---|---|
+| `onUnrecordedTransaction` | **required** | a transaction from a known agent address appears on-chain but is not in the receipt store. The event carries `severity: 'warning' \| 'critical'` |
+| `onCriticalTransaction` | optional | dedicated escalation path for `critical` events — fires after `gracePeriodMs` if the transaction is still unrecorded |
+| `onReorgDetected` | optional | a recorded transaction has moved to a different block (or no block) on-chain |
+
+If you only want to react to critical events, still implement `onUnrecordedTransaction` and filter inside it — the field cannot be omitted.
+
 ## Severity levels
 
 `warning` — fires immediately when an unrecorded transaction is detected.

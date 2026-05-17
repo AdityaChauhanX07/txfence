@@ -1,223 +1,351 @@
 ---
 title: "@txfence/core"
-description: Policy engine, agent orchestration, cap locking, receipt storage, and webhook approval.
+description: Policy engine, agent orchestration, cap locking, receipt storage, and webhook approval — the only required package.
 ---
 
 import { Callout } from "nextra/components";
 
 # @txfence/core
 
-Policy engine, agent orchestration, cap locking, receipt storage, and webhook approval. This is the only required package — all other packages plug into it.
+Policy engine, agent orchestration, cap locking, receipt storage, webhook approval, temporal rules, intent execution, and a chain-agnostic registry. This is the only required package — every other `@txfence/*` package plugs into it.
 
-## `createAgent`
+## createAgent
 
-Creates a policy-gated agent instance. This is the main entry point for most txfence integrations.
+Primary entry point. Wires policy, adapters, RPC URLs, and an executor into an agent with `submit`, `dryRun`, `executeIntent`, `shutdown`, `health`, and `isShuttingDown` methods. The signature is **positional with 16 slots** — pass `undefined` for slots you don't need.
 
 ```typescript
 function createAgent(
-  config: AgentConfig,
-  adapters: Record<ChainId, ChainAdapter>,
-  rpcUrls: Record<ChainId, string>,
-  executor: Executor,
-  options?: AgentOptions
+  config:               AgentConfig,                            //  1
+  adapters:             AdapterMap,                              //  2
+  rpcUrls:              Partial<Record<ChainId, string>>,        //  3
+  executor?:            (action, chainId, rpcUrl, evaluation, simulation) => Promise<SuccessReceipt>,  //  4
+  capLockProvider?:     CapLockProvider,                         //  5
+  metadataVerifier?:    MetadataVerifier,                        //  6
+  approvalProvider?:    ApprovalProvider,                        //  7
+  receiptStore?:        ReceiptStore,                            //  8
+  auditLog?:            AuditLog,                                //  9
+  telemetryProvider?:   TelemetryProvider,                       // 10
+  capLockConfigs?:      CapConfig[],                             // 11
+  policyNode?:          PolicyNode,                              // 12
+  notificationProvider?: NotificationProvider,                   // 13
+  provenanceChain?:     ProvenanceChain,                         // 14
+  eventStore?:          EventStore,                              // 15
+  agentId?:             string,                                  // 16
 ): Agent
 ```
 
-### Parameters
+`AgentConfig` is `{ chains, policies: Policy, signer }`. `policies` is required even when you also pass a `policyNode` — see the [Composite Policies guide](/docs/guides/composite-policies).
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `config` | `AgentConfig` | Yes | Policy and signer configuration |
-| `adapters` | `Record<ChainId, ChainAdapter>` | Yes | Simulation adapters per chain |
-| `rpcUrls` | `Record<ChainId, string>` | Yes | RPC endpoint URLs per chain |
-| `executor` | `Executor` | Yes | Function that signs and broadcasts |
-| `options.capLockProvider` | `CapLockProvider` | No | For multi-agent spend cap enforcement |
-| `options.receiptStore` | `ReceiptStore` | No | Persists execution receipts |
-| `options.approvalProvider` | `ApprovalProvider` | No | Human-in-the-loop approvals |
-| `options.auditLog` | `AuditLog` | No | Append-only decision log |
+## Agent
 
-### Returns
+```typescript
+type Agent = {
+  submit:         (input: { action: Action; policy: Policy }) => Promise<ExecutionResult>
+  dryRun:         (input: { action: Action; policy: Policy }) => Promise<DryRunResult>
+  executeIntent:  (intent: Intent, options?: Partial<IntentExecutionOptions>) => Promise<IntentExecutionResult>
+  shutdown:       (timeoutMs?: number) => Promise<AgentShutdownResult>
+  isShuttingDown: () => boolean
+  health:         () => AgentHealth
+  config:         AgentConfig
+}
+```
 
-An `Agent` object with a `submit(request)` method.
+Default `shutdown` timeout is 30 seconds. See [Agent Health & Shutdown](/docs/guides/agent-health), [Dry Run Mode](/docs/guides/dry-run), [Intent Execution](/docs/guides/intent-execution).
 
----
+## runPipeline
 
-## `runPipeline`
-
-The core pipeline function. Runs policy evaluation → simulation → human approval → execution for a single action.
+Low-level pipeline if you don't want to wrap state in an `Agent`. Same 16 positional slots after the leading `action` and `policy`.
 
 ```typescript
 async function runPipeline(
-  action: Action,
-  policy: Policy,
-  adapter: ChainAdapter,
-  rpcUrl: string,
-  executor: Executor,
-  options?: PipelineOptions
-): Promise<PipelineResult>
+  action:   Action,
+  policy:   Policy,
+  adapters: AdapterMap,
+  rpcUrls:  Partial<Record<ChainId, string>>,
+  executor?: /* ... same as createAgent ... */,
+  // capLockProvider, metadataVerifier, approvalProvider, receiptStore,
+  // auditLog, telemetryProvider, policyNode, notificationProvider,
+  // (capLockConfigs is on createAgent only — pipeline doesn't need it)
+  // provenanceChain, eventStore, agentId
+): Promise<ExecutionResult>
 ```
 
 ### Pipeline stages
 
-1. **Policy evaluation** — runs all 6 policy checks against the action and policy
-2. **Simulation** — if `requireSimulation: true`, runs `adapter.simulate()` and checks coverage
-3. **Human approval** — if spend ≥ `humanApprovalThreshold`, dispatches webhook and waits
-4. **Execution** — calls `executor(action, ...)` to sign and broadcast
+1. **Policy evaluation** — six static checks against action and policy
+2. **Temporal rules** — if `policy.temporalRules` and an `eventStore` are set
+3. **Simulation** — `adapter.simulate()`; gas buffer and revert check
+4. **Staleness check** — if `policy.simulationStalenessMs` is set, reject if simulation is older
+5. **Cap lock acquire** — two-phase reservation
+6. **Human approval** — if action value ≥ `humanApprovalThreshold`
+7. **Execution** — `executor` signs and broadcasts
+8. **Cap lock commit/release** — based on execution result
 
-### `PipelineResult` status values
-
-| Status | Meaning |
-|---|---|
-| `success` | Transaction confirmed; receipt available |
-| `policy_rejected` | Failed a policy check; `evaluation.rejectionReason` set |
-| `simulation_failed` | Simulation returned `success: false` |
-| `approval_pending` | Waiting for human approval |
-| `approval_timeout` | Approval window expired; transaction dropped |
-| `execution_failed` | Executor threw; `reason` string available |
-
----
-
-## `Policy` type
+## ExecutionResult
 
 ```typescript
-interface Policy {
-  chains: ChainId[];
-  maxSpendPerTx: TokenAmount;
-  allowedContracts: AllowedContract[];
-  requireSimulation: boolean;
-  gasBufferMultiplier: number;
-  humanApprovalThreshold: TokenAmount;
-  humanApprovalTimeoutMs: number;
-  capLockMode?: 'per-agent' | 'shared';
-}
+type ExecutionResult =
+  | { status: 'success';            receipt: SuccessReceipt }
+  | { status: 'policy_rejected';    action: Action;       evaluation: PolicyEvaluation }
+  | { status: 'simulation_failed';  action: Action;       simulation: SimulationResult }
+  | { status: 'simulation_stale';   action: Action;       simulation: SimulationResult; stalenessMs: number }
+  | { status: 'approval_timeout';   action: BoundAction }
+  | { status: 'execution_failed';   action: Action;       txHash: string; reason: ExecutionFailureReason }
 ```
 
-| Field | Description |
-|---|---|
-| `chains` | Which chains this agent may transact on |
-| `maxSpendPerTx` | Maximum spend per single transaction |
-| `allowedContracts` | Contract allowlist; empty means no contract calls allowed |
-| `requireSimulation` | Block execution if simulation was not run or failed |
-| `gasBufferMultiplier` | Minimum gas buffer (e.g., `1.2` = 20% above estimate) |
-| `humanApprovalThreshold` | Spend at or above this requires explicit human approval |
-| `humanApprovalTimeoutMs` | Cancel-on-timeout window (default 30,000 ms) |
-| `capLockMode` | `'per-agent'` uses in-memory lock; `'shared'` requires a `CapLockProvider` |
+`ExecutionFailureReason` is a discriminated union with codes `no_executor`, `executor_threw`, `signing_failed`, `broadcast_failed`. Use `formatExecutionFailureReason(reason)` for a human-readable string.
 
----
-
-## `Action` types
-
-### `TransferAction`
+## Policy
 
 ```typescript
-interface TransferAction {
-  kind: 'transfer';
-  chain: ChainId;
-  token: TokenAmount;
-  to: string;
+type Policy = {
+  chains:                 ChainId[]
+  maxSpendPerTx:          TokenAmount
+  allowedContracts:       ContractEntry[]
+  requireSimulation:      boolean
+  gasBufferMultiplier:    number
+  humanApprovalThreshold: TokenAmount
+  humanApprovalTimeoutMs: number
+  capLockMode:            'per-agent' | 'shared'
+  capLocks?:              CapConfig[]
+  simulationStalenessMs?: number
+  mevProtection?:         'flashbots' | 'mev-blocker' | 'none'
+  temporalRules?:         TemporalRule[]
 }
+
+type TokenAmount   = { token: string; amount: bigint; decimals: number }
+type ContractEntry = { address: string; chain: ChainId; bytecodeHash?: string; ownerAddress?: string; expiresAt?: number }
 ```
 
-### `SwapAction`
+See [MEV Protection](/docs/guides/mev-protection), [Temporal Rules](/docs/guides/temporal-rules), [Config Validation](/docs/guides/config-validation).
+
+## Action
+
+Three action kinds — `transfer`, `swap`, `contract_call`.
 
 ```typescript
-interface SwapAction {
-  kind: 'swap';
-  chain: ChainId;
-  from: TokenAmount;
-  to: TokenAmount;
-  maxSlippage: number;  // basis points, e.g. 50 = 0.5%
-  via: string;          // DEX router contract address
-  calldata: `0x${string}`;
+type TransferAction = {
+  kind:                'transfer'
+  chain:               ChainId
+  token:               TokenAmount
+  to:                  string
+  calldata?:           `0x${string}`
+  solanaTransaction?:  Uint8Array
+  cosmosTransaction?:  Uint8Array
 }
+
+type SwapAction = {
+  kind:                'swap'
+  chain:               ChainId
+  from:                TokenAmount     // source token + amount
+  to:                  string          // destination token symbol
+  via:                 string          // router contract address
+  maxSlippage:         number          // basis points; 0 is rejected as 'not declared'
+  calldata?:           `0x${string}`
+  solanaTransaction?:  Uint8Array
+  cosmosTransaction?:  Uint8Array
+}
+
+type ContractCallAction = {
+  kind:                'contract_call'
+  chain:               ChainId
+  contract:            string
+  method:              string
+  args:                unknown[]
+  value?:              TokenAmount
+  calldata?:           `0x${string}`
+  solanaAccounts?:     SolanaAccountMeta[]
+  solanaData?:         Uint8Array
+  solanaTransaction?:  Uint8Array
+  cosmosTransaction?:  Uint8Array
+}
+
+type Action = TransferAction | SwapAction | ContractCallAction
 ```
 
 <Callout type="warning">
-  `maxSlippage: 0` is treated as **not declared** and is always rejected. Set a non-zero value even for zero-tolerance swaps — use `1` for near-zero tolerance.
+  `maxSlippage: 0` is treated as **not declared** and is always rejected. Set a non-zero value even for zero-tolerance swaps — use `1` for one-basis-point tolerance.
 </Callout>
 
-### `ContractCallAction`
+## ReceiptStore
 
 ```typescript
-interface ContractCallAction {
-  kind: 'contract_call';
-  chain: ChainId;
-  contract: string;
-  calldata: `0x${string}`;
-  value?: TokenAmount;
+type ReceiptStore = {
+  save: (receipt: SuccessReceipt) => Promise<void>
+  get:  (txHash: string)          => Promise<SuccessReceipt | null>
+  list: (filter?: ReceiptFilter)  => Promise<SuccessReceipt[]>
+}
+
+type ReceiptFilter = {
+  chain?: ChainId
+  from?:  number   // start block, inclusive
+  to?:    number   // end block, inclusive
 }
 ```
 
----
+In-memory: `createMemoryReceiptStore()`. File-backed NDJSON: `createFileReceiptStore(path)`. PostgreSQL: [`@txfence/storage-pg`](/docs/api-reference/storage-pg). SQLite: [`@txfence/storage-sqlite`](/docs/api-reference/storage-sqlite).
 
-## `ReceiptStore` interface
+## CapLockProvider
 
 ```typescript
-interface ReceiptStore {
-  save(receipt: SuccessReceipt): Promise<void>;
-  get(txHash: string): Promise<SuccessReceipt | null>;
-  list(filter?: { chain?: ChainId; from?: Date; to?: Date }): Promise<SuccessReceipt[]>;
+type CapLockProvider = {
+  acquire:       (capId: string, amount: bigint, token: string) => Promise<CapLockResult>
+  release:       (capId: string, lockId: string, amount: bigint) => Promise<void>
+  commit:        (capId: string, lockId: string, amount: bigint) => Promise<void>
+  onCapWarning?: (event: CapWarningEvent) => void
+  inspect?:      (capId: string) => Promise<CapInspection>
+}
+
+type CapLockResult =
+  | { granted: true;  lockId: string }
+  | { granted: false; reason: 'absolute_cap_exceeded' | 'rolling_window_exceeded' }
+```
+
+`commit` and `release` take the `lockId` returned by `acquire` — the pipeline tracks IDs internally so callers rarely interact with them directly.
+
+### createMemoryCapLockProvider
+
+```typescript
+function createMemoryCapLockProvider(
+  configs: CapConfig[],
+  options?: { onCapWarning?: (event: CapWarningEvent) => void },
+): CapLockProvider & { inspect: (capId: string) => Promise<CapInspection> }
+
+type CapConfig = {
+  capId:                string
+  absoluteCap?:         { maxAmount: bigint; token: string }
+  rollingWindow?:       { windowMs: number; maxAmount: bigint; token: string }
+  warningThresholdPct?: number  // 0-100, triggers onCapWarning
 }
 ```
 
-The in-memory implementation is included in `@txfence/core`. For persistence use `@txfence/storage-sqlite` or `@txfence/storage-pg`.
+Single-process only. For distributed deployments, use [`@txfence/redis`](/docs/api-reference/redis).
 
----
-
-## `CapLockProvider` interface
+## ApprovalProvider
 
 ```typescript
-interface CapLockProvider {
-  acquire(capId: string, amount: bigint): Promise<boolean>;
-  commit(capId: string, amount: bigint): Promise<void>;
-  release(capId: string, amount: bigint): Promise<void>;
-  getStatus(capId: string): Promise<CapStatus>;
+type ApprovalProvider = {
+  request: (req: ApprovalRequest) => Promise<void>
+  poll:    (token: string) => Promise<ApprovalDecision | null>
 }
+
+type ApprovalDecision = 'approved' | 'rejected'
 ```
 
-The two-phase protocol: `acquire` reserves the amount (returns `false` if cap exceeded), `commit` records it permanently after confirmation, `release` frees a reservation on failure.
+`request` dispatches the approval (e.g. webhook POST). `poll` returns `null` while pending. Cancel-on-timeout is enforced by the pipeline — a timeout returns `{ status: 'approval_timeout' }`, never falls through to execution.
 
----
-
-## `ApprovalProvider` interface
+### createWebhookApprovalProvider
 
 ```typescript
-interface ApprovalProvider {
-  request(action: Action, policy: Policy): Promise<string>;  // returns approvalId
-  poll(approvalId: string, timeoutMs: number): Promise<'approved' | 'rejected' | 'timeout'>;
-}
+function createWebhookApprovalProvider(
+  webhookUrl: string,
+  pollUrl:    string,
+  options?:   {
+    webhookSecret?:  string   // enables HMAC-SHA256 signing of the payload
+    pollIntervalMs?: number
+  },
+): ApprovalProvider
 ```
 
----
+POSTs the `ApprovalRequest` to `webhookUrl` with an `X-TXFence-Signature` header when `webhookSecret` is set. The payload includes `approveUrl` and `rejectUrl` for one-click approval via email.
 
-## `createWebhookApprovalProvider`
+## Low-level helpers
+
+Exports useful when building custom infrastructure around the engine. None of these are needed for normal `createAgent` usage.
+
+### Policy evaluation
 
 ```typescript
-function createWebhookApprovalProvider(options: {
-  webhookUrl: string;
-  pollUrl: string;
-  webhookSecret?: string;
-  retries?: number;
-}): ApprovalProvider
+function evaluate(
+  policy:            Policy,
+  action:            Action,
+  simulationResult?: SimulationResult,
+): PolicyEvaluation
 ```
 
-Dispatches an HMAC-SHA256 signed POST to `webhookUrl` with the action details and an `approvalId`. Polls `pollUrl?approvalId=...` until approval, rejection, or timeout.
-
----
-
-## `createMemoryCapLockProvider`
+Pure synchronous policy evaluator. Returns `{ passed, checksRun, rejectionReason? }`. Used internally by `runPipeline`.
 
 ```typescript
-function createMemoryCapLockProvider(options: {
-  caps: CapConfig[];
-  onCapWarning?: (capId: string, used: bigint, limit: bigint) => void;
-}): CapLockProvider
-
-interface CapConfig {
-  capId: string;
-  absoluteCap?: { maxAmount: bigint; token: string; decimals: number };
-  rollingWindow?: { windowMs: number; maxAmount: bigint; token: string; decimals: number };
-}
+function evaluateNode(
+  node:              PolicyNode,
+  action:            Action,
+  simulationResult?: SimulationResult,
+): PolicyNodeEvaluation
 ```
 
-Safe within a single process. For multi-process environments use `@txfence/redis`.
+Tree-aware version for [composite policies](/docs/guides/composite-policies). Returns a tree-structured result that preserves which branches passed.
+
+### Adapter composition
+
+```typescript
+function createMultiChainAdapter(adapters: AdapterMap): ChainAdapter
+```
+
+Wraps an `AdapterMap` (`{ ethereum: { simulate }, arbitrum: { simulate } }`) into a single `ChainAdapter` that dispatches by `action.chain`. Used when a downstream API expects one adapter.
+
+```typescript
+function wrapAdapterWithCircuitBreaker(
+  adapter: ChainAdapter,
+  breaker: CircuitBreaker,
+  chainId: ChainId,
+): ChainAdapter
+```
+
+See [Circuit Breaker](/docs/guides/circuit-breaker).
+
+### Error formatting
+
+```typescript
+function getPolicyRejectionMessage(reason: PolicyRejectionReason): string
+function getSimulationFailureMessage(result: SimulationResult): string
+function formatExecutionFailureReason(reason: ExecutionFailureReason): string
+```
+
+All three produce human-readable strings for logs, CLI output, or UI display.
+
+### Serialization
+
+```typescript
+function bigintReplacer(key: string, value: unknown): unknown
+function serializeWithBigInt(obj: unknown): string
+function parseWithBigInt(json: string): unknown
+function reviveTokenAmount(raw: unknown): TokenAmount
+function revivePolicy(raw: unknown): Policy
+function reviveAction(raw: unknown): Action
+function reviveSimulationResult(raw: unknown): SimulationResult
+function reviveSuccessReceipt(raw: unknown): SuccessReceipt
+```
+
+Used by every storage backend (file, SQLite, PostgreSQL, audit, provenance) so the same bigint-handling round-trip is consistent across the project.
+
+### Contract test suites
+
+Every interface has a portable contract suite — run them against your own implementation to verify substitutability:
+
+```typescript
+import { receiptStoreContract, capLockProviderContract, auditLogContract, approvalProviderContract } from '@txfence/core/contracts'
+
+receiptStoreContract('My S3 receipt store', () => createS3ReceiptStore({ ... }))
+```
+
+### Other exports
+
+The registry (`asset`, `protocol`, `maxSpend`, `createRegistry`, `defaultRegistry`, `BUILT_IN_ASSETS`, `BUILT_IN_PROTOCOLS`) is documented in [Chain-Agnostic Policy](/docs/guides/chain-agnostic-policy).
+
+Notification providers (`createConsoleNotificationProvider`, `createWebhookNotificationProvider`, `createCompositeNotificationProvider`) are documented in [Notifications](/docs/guides/notifications).
+
+Telemetry (`noopTelemetry`, `TelemetryProvider`, `Span`) is documented in [Telemetry](/docs/guides/telemetry).
+
+Policy versioning (`getPolicyVersionId`, `createPolicyVersion`, `createPolicyVersionStore`) is documented in [Policy Versioning](/docs/guides/policy-versioning).
+
+Multi-agent coordination (`createMemoryAgentCoordinator`, `getIntentId`, `getIntentIdWithNonce`) is documented in [Multi-Agent Coordination](/docs/guides/multi-agent).
+
+Intent helpers (`executeIntent`, `evaluateIntent`, `validateIntentGraph`, `getExecutionPlan`, `getPoisonedSteps`, `analyzeIntentPosition`, `getActionPositionChanges`, `mergePositionChanges`, `isSingleTokenIntent`, `getDominantToken`, `checkMaxSteps`) are documented in [Intent Execution](/docs/guides/intent-execution).
+
+Temporal rules (`createMemoryEventStore`, `evaluateTemporalRules`) are documented in [Temporal Rules](/docs/guides/temporal-rules).
+
+Replay (`replayAuditLog`) is documented in [Replay & Backtesting](/docs/guides/replay).
+
+Diff (`diffPolicies`, `createTestActions`) is documented in [Policy Diff](/docs/guides/policy-diff).
+
+Validation (`validateConfig`) is documented in [Config Validation](/docs/guides/config-validation).

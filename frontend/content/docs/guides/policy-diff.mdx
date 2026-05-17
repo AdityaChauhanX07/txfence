@@ -1,0 +1,123 @@
+---
+title: Policy Diff
+description: Compare two policies against a set of actions — see exactly which transactions change between them and how.
+---
+
+import { Callout } from "nextra/components";
+
+# Policy Diff
+
+Before deploying a policy change, you want to know its blast radius: which previously-allowed actions will start being rejected, which previously-rejected actions will start being allowed, and which rejections will switch to a different reason. `diffPolicies` is a pure function that answers that question deterministically — no chain calls, no async, no side effects.
+
+For *historical* impact analysis (run a proposed policy against your audit log), see [Replay & Backtesting](/docs/guides/replay). For *forward-looking* impact analysis against a generated test suite, use this guide.
+
+## diffPolicies
+
+```typescript
+import { diffPolicies } from '@txfence/core'
+
+const diff = diffPolicies({
+  policyA: currentPolicy,
+  policyB: proposedPolicy,
+  actions: [
+    { action: smallTransfer },
+    { action: largeSwap, simulationResult: swapSim },
+    { action: contractCall },
+  ],
+})
+
+console.log(diff.summary)
+// {
+//   total:                  3,
+//   changed:                1,
+//   newlyAllowed:           0,
+//   newlyRejected:          1,
+//   rejectionReasonChanged: 0,
+//   unchanged:              2,
+//   requiresSimulation:     1,   // actions whose checks need a simulationResult to be evaluated
+// }
+```
+
+`requiresSimulation` counts actions where at least one check depended on simulation output but no `simulationResult` was supplied — those checks are skipped, so the diff for those actions may be incomplete.
+
+## ActionDiffDirection
+
+Every changed action falls into exactly one of three buckets:
+
+```typescript
+type ActionDiffDirection =
+  | 'newly_allowed'             // rejected by policyA, allowed by policyB
+  | 'newly_rejected'             // allowed by policyA, rejected by policyB
+  | 'rejection_reason_changed'   // both reject, but for different reasons
+```
+
+The third case is easy to miss without a diff tool — both policies reject the action, so a binary "did it pass?" comparison shows no change, but the *why* changed. That signals a policy interaction you may not have intended.
+
+## ChangedCheck
+
+Each `ActionDiffResult` includes the per-check breakdown:
+
+```typescript
+type ChangedCheck = {
+  checkName:         string
+  inA:               boolean
+  inB:               boolean
+  rejectionReasonA?: PolicyRejectionReason
+  rejectionReasonB?: PolicyRejectionReason
+}
+```
+
+`inA` / `inB` are whether the check ran in each policy. A check might be skipped entirely if its preconditions weren't met (e.g. gas buffer is only checked when simulation succeeded).
+
+## createTestActions
+
+Generating a covering action set by hand is tedious. `createTestActions` builds a minimal set from a policy: an action at the spend limit, an action over the limit, a swap for each allowed contract, a swap targeting an unlisted contract, and a swap with zero slippage.
+
+```typescript
+import { createTestActions, diffPolicies } from '@txfence/core'
+
+const actions = createTestActions(currentPolicy)
+const diff = diffPolicies({ policyA: currentPolicy, policyB: proposedPolicy, actions })
+```
+
+This is what the `--generate-actions` CLI flag does internally.
+
+## CLI
+
+```bash
+# Compare against a hand-rolled action set
+txfence diff \
+  --config-a ./current.config.ts \
+  --config-b ./proposed.config.ts \
+  --actions-file ./test-actions.json
+
+# Or auto-generate the action set from policy A
+txfence diff \
+  --config-a ./current.config.ts \
+  --config-b ./proposed.config.ts \
+  --generate-actions
+```
+
+The command exits 1 if any actions are newly rejected — drop it into CI as a gate on every policy change PR.
+
+## MCP tool
+
+`txfence_diff_policies` exposes the same logic to AI assistants:
+
+- Auto-generates test actions from `policyA` when none are supplied
+- Returns a compact JSON summary plus per-action direction and reason changes
+- Useful for "explain the blast radius of this change" prompts during a code review
+
+## Workflow
+
+A typical policy change goes:
+
+1. Edit the policy file.
+2. `txfence diff --config-a ./current.ts --config-b ./proposed.ts --generate-actions` — synthetic blast radius.
+3. `txfence replay --audit-log ./audit.jsonl --config ./proposed.ts --only-changed` — historical blast radius.
+4. Review newly-rejected entries from both — are any of them legitimate?
+5. Merge if the diff is acceptable.
+
+<Callout type="info">
+  `diff` and `replay` use the same `ChangedCheck` type. The classification logic is shared, so a check that appears as `newly_rejected` in `diff` will surface identically in `replay` — you only learn one mental model.
+</Callout>

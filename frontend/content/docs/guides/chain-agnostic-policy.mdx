@@ -1,0 +1,142 @@
+---
+title: Chain-Agnostic Policy
+description: Write policies that reference assets and protocols by name — let the registry resolve chain-specific addresses at build time.
+---
+
+import { Callout } from "nextra/components";
+
+# Chain-Agnostic Policy
+
+Hardcoding contract addresses and token decimals in policies is fragile. USDC has different addresses on Ethereum, Arbitrum, Optimism, and Base. Uniswap V3's router lives at the same address everywhere except where it doesn't. txfence ships with a registry that lets you write policies in terms of assets and protocol IDs — the addresses are resolved once at build time, and the runtime policy engine stays pure.
+
+## Helpers
+
+Three top-level helpers cover the common cases. All delegate to the singleton `defaultRegistry`.
+
+```typescript
+import { asset, protocol, maxSpend } from '@txfence/core'
+```
+
+`asset(symbol, chain)` — returns the full `AssetDefinition` (symbol, chain, address, decimals). Throws if not found.
+
+`protocol(id, chains)` — returns a `ContractEntry[]` ready to spread into `allowedContracts`. Accepts one chain or many.
+
+`maxSpend(amount, symbol, chain)` — returns a `TokenAmount` with decimals resolved from the registry, so you can't accidentally write `1000n` for USDC and authorize a million-times overspend.
+
+## Policy example
+
+```typescript
+import { protocol, maxSpend } from '@txfence/core'
+import type { Policy } from '@txfence/core'
+
+const policy: Policy = {
+  chains: ['ethereum', 'arbitrum'],
+  maxSpendPerTx: maxSpend(10_000n, 'USDC', 'ethereum'),
+  allowedContracts: [
+    ...protocol('uniswap-v3', ['ethereum', 'arbitrum']),
+    ...protocol('aave-v3',    ['ethereum']),
+  ],
+  requireSimulation:      true,
+  gasBufferMultiplier:    1.2,
+  humanApprovalThreshold: maxSpend(50_000n, 'USDC', 'ethereum'),
+  humanApprovalTimeoutMs: 30000,
+  capLockMode:            'per-agent',
+}
+```
+
+`protocol('uniswap-v3', ['ethereum', 'arbitrum'])` expands to every contract registered for Uniswap V3 on both chains — router, factory, quoter — so allowlist enforcement covers the full surface area without you tracking 6+ addresses by hand.
+
+## Built-in registry
+
+`@txfence/core` ships with 21 asset entries and 16 protocol entries out of the box.
+
+**Assets (21):**
+
+| Chain | Tokens |
+|---|---|
+| Ethereum | USDC, USDT, DAI, WETH, WBTC, stETH |
+| Arbitrum | USDC, USDT, DAI, WETH, WBTC |
+| Optimism | USDC, USDT, DAI, WETH |
+| Base | USDC, DAI, WETH |
+| Cosmos Hub | ATOM |
+| Osmosis | OSMO, ATOM (IBC) |
+
+**Protocols:**
+
+| Protocol | Chains |
+|---|---|
+| Uniswap V3 | Ethereum, Arbitrum, Optimism, Base |
+| 1inch V5 | Ethereum, Arbitrum, Optimism, Base |
+| Aave V3 | Ethereum, Arbitrum, Optimism, Base |
+| Compound V3 | Ethereum, Arbitrum |
+| Lido | Ethereum |
+| Curve Finance | Ethereum |
+
+Access the raw definitions if you need them:
+
+```typescript
+import { BUILT_IN_ASSETS, BUILT_IN_PROTOCOLS } from '@txfence/core'
+```
+
+## Strict vs. lenient lookup
+
+`asset()` and `protocol()` throw when an entry is missing — fail-fast for production policies.
+
+`getAsset()` and `getProtocol()` return `undefined` — use when you're probing whether something exists or building a UI that lists supported chains:
+
+```typescript
+import { getAsset, listAssets, listProtocols } from '@txfence/core'
+
+const usdcOnPolygon = getAsset('USDC', 'polygon')   // undefined — not in registry
+
+const allEthereumAssets    = listAssets('ethereum')
+const allRegisteredProtos  = listProtocols()
+```
+
+Symbol lookup is case-insensitive — `'usdc'` and `'USDC'` resolve the same entry.
+
+## Custom registries
+
+For protocols outside the built-in set — a Curve pool you trade often, an in-house vault, an L2 the registry doesn't know about yet — create your own registry:
+
+```typescript
+import { createRegistry } from '@txfence/core'
+
+const registry = createRegistry()  // starts pre-populated with all built-ins
+
+registry.addAsset({
+  symbol:   'PYUSD',
+  chain:    'ethereum',
+  address:  '0x6c3ea9036406852006290770BEdFcAbA0e23A0e8',
+  decimals: 6,
+})
+
+registry.addProtocol({
+  id:    'curve-tricrypto',
+  name:  'Curve TriCrypto',
+  chain: 'ethereum',
+  contracts: [
+    { address: '0xD51a44d3FaE010294C616388b506AcdA1bfAAE46', role: 'pool' },
+  ],
+})
+
+// Now use the same helper methods on your registry instance:
+const policy: Policy = {
+  chains:           ['ethereum'],
+  maxSpendPerTx:    registry.maxSpend(5_000n, 'PYUSD', 'ethereum'),
+  allowedContracts: registry.protocol('curve-tricrypto', 'ethereum'),
+  // ...
+}
+```
+
+`addAsset()` and `addProtocol()` replace existing entries for the same `symbol+chain` or `id+chain` — so you can override the built-in Uniswap V3 router with a fork if you need to.
+
+For a fully custom setup with no built-ins at all, pass empty arrays:
+
+```typescript
+const registry = createRegistry([], [])  // no built-ins
+```
+
+<Callout type="info">
+  Addresses resolve at policy *build* time, not at evaluation time. Once your policy is constructed, the engine sees only concrete `ContractEntry` records — there's no runtime registry lookup in the hot path.
+</Callout>
