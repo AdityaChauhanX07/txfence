@@ -83,7 +83,7 @@ const PACKAGES: Pkg[] = [
   },
   {
     name: "@txfence/react",
-    role: "React hooks (useAgent, useSubmit) for building frontends on top of txfence agents",
+    role: "Seven React hooks (useAgent, useSubmit, useSimulate, useReceipt, useDryRun, useIntentSubmit, useAgentHealth) for building frontends on top of txfence agents",
     tag: "Tooling",
   },
   {
@@ -141,7 +141,7 @@ export function PackageGrid() {
             lineHeight: 1.3,
           }}
         >
-          17 packages. One mission.
+          14 packages. One mission.
         </h2>
 
         {/* Subheadline */}

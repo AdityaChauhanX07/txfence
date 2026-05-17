@@ -55,7 +55,7 @@ export function CTA() {
         >
           Self-hosted. MIT licensed. Runs on your infrastructure.
           <br />
-          600+ tests. 17 packages. Production-ready.
+          600+ tests. 14 packages. Production-ready.
         </p>
 
         {/* Actions row */}

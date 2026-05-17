@@ -3,25 +3,24 @@ import { CodeBlock } from "@/components/ui/code-block";
 // ─── Code sample ──────────────────────────────────────────────────────────────
 
 const quickStartCode = `import { createAgent } from '@txfence/core'
+import type { Policy } from '@txfence/core'
 import { simulateEvmAction, executeEvmAction, privateKeySigner } from '@txfence/evm'
 
 const signer = privateKeySigner(process.env.PRIVATE_KEY as \`0x\${string}\`)
 
+const policy: Policy = {
+  chains:                 ['ethereum'],
+  maxSpendPerTx:          { token: 'USDC', amount: 1000n, decimals: 6 },
+  allowedContracts:       [{ address: '0xYOUR_CONTRACT', chain: 'ethereum' }],
+  requireSimulation:      true,
+  gasBufferMultiplier:    1.2,
+  humanApprovalThreshold: { token: 'USDC', amount: 10000n, decimals: 6 },
+  humanApprovalTimeoutMs: 30000,
+  capLockMode:            'per-agent',
+}
+
 const agent = createAgent(
-  {
-    chains: ['ethereum'],
-    policies: {
-      chains:                 ['ethereum'],
-      maxSpendPerTx:          { token: 'USDC', amount: 1000n, decimals: 6 },
-      allowedContracts:       [{ address: '0xYOUR_CONTRACT', chain: 'ethereum' }],
-      requireSimulation:      true,
-      gasBufferMultiplier:    1.2,
-      humanApprovalThreshold: { token: 'USDC', amount: 10000n, decimals: 6 },
-      humanApprovalTimeoutMs: 30000,
-      capLockMode:            'per-agent',
-    },
-    signer,
-  },
+  { chains: ['ethereum'], policies: policy, signer },
   { ethereum: { simulate: simulateEvmAction } },
   { ethereum: 'https://ethereum.publicnode.com' },
   (action, chainId, rpcUrl, evaluation, simulation) =>
