@@ -2,6 +2,8 @@
 
 This document describes the threat model for txfence, what the SDK protects against, and what it does not protect against. Teams deploying txfence in production should read this before doing so.
 
+Related reading: [docs/failure-taxonomy.md](failure-taxonomy.md) catalogues how autonomous agents fail and which failure modes txfence addresses. [docs/txfence-failure-taxonomy.md](txfence-failure-taxonomy.md) catalogues how txfence itself can fail.
+
 ---
 
 ## Threat model
@@ -37,6 +39,12 @@ txfence is **not** a general security tool. It does not protect against all thre
 
 **Cap locking for multi-agent environments** — the `CapLockProvider` interface and its implementations use two-phase acquire/commit/release to prevent concurrent agents from collectively exceeding a shared cap. The in-memory implementation is safe within a single process. The Redis implementation uses atomic Lua scripts for safety across processes.
 
+**MEV protection** — when `Policy.mevProtection` is set to `'flashbots'` or `'mev-blocker'`, transactions are routed through private RPC endpoints that bypass the public mempool, preventing sandwich attacks and other forms of MEV extraction. The setting is per-transaction, so swaps can use Flashbots while internal transfers use the default path. Only applies to EVM chains; Solana and Cosmos adapters ignore the field.
+
+**Temporal rules** — `policy.temporalRules` evaluates behavioral patterns over sliding windows of pipeline events. Six predicate kinds detect spend velocity, simulation failure rate, contract call frequency, consecutive failures, success drought, and approval flood. A predicate can trigger automatic rejection, an approval requirement, or a review flag. Patterns that look benign in isolation but problematic over time are caught without the agent itself having to recognize the pattern.
+
+**Intent-level DAG execution** — multi-step operations declared as a graph (`agent.executeIntent`) propagate failures through dependency edges. A failed step poisons only the steps that depend on it. Position analysis tracks gross outflow, net change, and intermediate exposure across the whole intent before any signing happens. Fork simulation via Tenderly lets the entire graph be tested against current chain state in a single forked snapshot before commitment.
+
 ### Webhook security
 
 **HMAC-SHA256 payload signing** — webhook payloads dispatched by `createWebhookApprovalProvider` include an `X-TXFence-Signature` header containing an HMAC-SHA256 signature of the payload body. Receivers should verify this signature before trusting the payload. Without verification, an attacker who knows the webhook URL can send fake approval requests.
@@ -45,11 +53,19 @@ txfence is **not** a general security tool. It does not protect against all thre
 
 **Append-only audit log** — `@txfence/audit` records every pipeline decision regardless of outcome, including rejections that never reach the chain. The `policySnapshot` field captures the policy at decision time via deep clone, ensuring the record is immutable even if the caller mutates the policy object afterward.
 
+**Cryptographic provenance chain** — `@txfence/provenance` extends the audit story with tamper evidence. Every authorization decision is hash-linked to the previous one using SHA-256, so modifying any historical record invalidates every entry after it. `chain.verify()` walks the chain and reports `hash_mismatch`, `chain_broken`, or `invalid_hash` violations. Merkle proofs allow compact verification that a specific record exists without exposing the rest of the chain.
+
 ### On-chain reconciliation
 
 **Unrecorded transaction detection** — `@txfence/monitor` scans blocks for transactions from known agent addresses and checks them against the receipt store. Transactions that appear on-chain but were not recorded by txfence trigger an alert. This is the primary detection mechanism for signing key compromise.
 
 **Chain reorganization detection** — the monitor performs reverse reconciliation, checking that recorded receipts still exist at the expected block number. Block number mismatches indicate a chain reorganization after the receipt was recorded.
+
+### Pre-deploy verification
+
+**Bounded model checking** — `@txfence/verify` formally checks three properties of any policy before it is deployed: `absolute_cap_reachability` (can N agents × M transactions reach the absolute cap?), `rolling_window_saturation` (can N agents collectively exceed a rolling window through adversarial scheduling?), and `policy_containment` (is every action allowed by `innerPolicy` also allowed by `outerPolicy`?). Each check returns either a "holds" status with the verified bound or a "violated" status with a concrete counterexample showing exactly how the property can be broken.
+
+**Adversarial stress testing** — the same package runs six attack vectors against the policy by default: `rapid_fire`, `coordinated_drain`, `rpc_failure`, `stale_simulation`, `cap_boundary`, and `approval_flood`. The output is a risk report with per-vector failure rates, severity counts, and an actionable recommendation. Both verification and stress testing have CLI commands (`txfence verify`, `txfence stress-test`) that exit non-zero on violations, making them CI-friendly gates for every policy change before it lands.
 
 ---
 
@@ -81,7 +97,7 @@ txfence operates in the pre-signing and pre-broadcast window. Once a transaction
 
 txfence enforces the policy it is given. If the policy itself is misconfigured — too-high spend caps, overly broad allowlists, missing simulation requirements — txfence will enforce those misconfigured rules faithfully. The SDK cannot detect policy configuration errors.
 
-**Mitigation:** Use `txfence diff` to compare policy changes before deploying them. Use `createTestActions` to generate a covering set of actions and verify the policy behaves as expected. Review policy changes in code review like any other security-sensitive configuration.
+**Mitigation:** Use `txfence diff` to compare policy changes before deploying them. Use `createTestActions` to generate a covering set of actions and verify the policy behaves as expected. Use `@txfence/verify` to formally check the three policy properties (absolute cap reachability, rolling window saturation, policy containment) and `stressTest` to run six adversarial attack vectors against the policy. Wire the corresponding CLI commands (`txfence verify`, `txfence stress-test`) into CI to gate every policy change before it ships. Review policy changes in code review like any other security-sensitive configuration.
 
 ### MCP tool misuse
 
@@ -120,13 +136,18 @@ Call this before trusting any fields in the webhook payload.
 
 ## Audit log tamper evidence
 
-The file-based `@txfence/audit` backend is append-only but does not chain entries with hashes. A determined attacker with file system access can edit entries without detection. Teams with strict tamper-evidence requirements should:
+The file-based `@txfence/audit` backend is append-only but does not chain entries with hashes. A determined attacker with file system access can edit entries without detection. Teams with strict tamper-evidence requirements have two options:
 
-1. Use a write-once storage backend (S3 with object lock, WORM storage) for the audit log file
-2. Or implement a hash-chaining audit log backend (planned for a future release)
+1. Use a write-once storage backend (S3 with object lock, WORM storage) for the audit log file. A tampered entry cannot be made to look intact under this configuration, even though detection still happens after the fact rather than at write time.
+
+2. Use `@txfence/provenance` instead of (or alongside) `@txfence/audit`. Provenance chains record every authorization decision as a SHA-256 hash-linked entry. Modifying any historical record invalidates every entry after it. `chain.verify()` walks the chain and reports `hash_mismatch`, `chain_broken`, or `invalid_hash` violations. Merkle proofs let a record's existence be verified without exposing the rest of the chain. The CLI exposes `txfence provenance verify` and `txfence provenance proof` for scheduled integrity checks and on-demand proof generation.
 
 ---
 
 ## Reporting security issues
 
-If you discover a security vulnerability in txfence, please open a GitHub issue with the label `security`. Do not include exploit details in the public issue — describe the vulnerability category and we will follow up privately.
+Do not file a public GitHub issue for security vulnerabilities. The repository's security policy is documented in [SECURITY.md](../SECURITY.md) at the root and uses GitHub's private security advisory feature:
+
+https://github.com/AdityaChauhanX07/txfence/security/advisories/new
+
+Read [SECURITY.md](../SECURITY.md) for the in-scope categories, response timeline, and coordinated disclosure window.

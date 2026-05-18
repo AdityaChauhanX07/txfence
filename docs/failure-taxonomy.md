@@ -1,6 +1,8 @@
-# txfence failure taxonomy
+# Agent failure taxonomy
 
 This document catalogs every known failure mode for autonomous agents executing transactions on-chain. It is a design input for txfence — every policy primitive, simulation contract, and safety guarantee in the SDK traces back to at least one entry here. It is also a reference for builders using txfence, so they understand precisely what the SDK protects against and where the boundaries of that protection are. No SDK eliminates all risk. This document is honest about that.
+
+This document covers how **agents** fail. For how **txfence itself** can fail (infrastructure failures, race conditions, and edge cases in the SDK's own components), see [docs/txfence-failure-taxonomy.md](txfence-failure-taxonomy.md).
 
 ---
 
@@ -16,6 +18,12 @@ This document catalogs every known failure mode for autonomous agents executing 
 | 6 | Approval timeout default | No | Yes — cancel-on-timeout is the hard default |
 | 7 | Stale allowlist | Partially | Partially — with metadata verification |
 | 8 | Gas estimation failure | Partially | Partially — minimum buffer multiplier enforced |
+| 9 | MEV sandwich attack | No | Yes — with Flashbots or MEV Blocker routing |
+| 10 | Unauthorized approval execution | No | Yes — HMAC-signed webhooks, cancel-on-timeout |
+| 11 | Audit trail tampering | No | Yes — hash-chained provenance with Merkle proofs |
+| 12 | Behavioral pattern attacks | No | Yes — temporal rules with sliding-window detection |
+| 13 | Multi-step intent partial failure | Partially | Yes — DAG execution with dependency management |
+| 14 | Policy configuration bug | No | Yes — formal verification and adversarial stress testing |
 
 ---
 
@@ -112,6 +120,78 @@ This document catalogs every known failure mode for autonomous agents executing 
 **What simulation catches:** The gas consumption of the simulated execution path. Not the gas consumption of the actual execution path if state has diverged.
 
 **What the policy engine can enforce:** txfence enforces a minimum gas buffer multiplier at the policy level. The default is 1.2x the simulation estimate. Builders can increase it per action type. txfence will not sign a transaction where the gas limit is below the buffered estimate. The buffer is declared and visible in the receipt, so consumers know exactly what multiplier was applied.
+
+---
+
+## 9. MEV sandwich attack
+
+**What happens:** A swap is broadcast to the public mempool. A searcher sees the pending transaction, front-runs it with a buy on the same pool, lets the agent's transaction execute at a worse price, then back-runs with a sell. The agent loses the price difference to the sandwich.
+
+**Root cause:** EVM public mempools are observable. Any party watching the mempool can identify profitable sandwich opportunities and assemble three-transaction bundles atomically. The agent has no protection at the transport layer if it broadcasts through a public RPC.
+
+**What simulation catches:** Nothing about MEV. Simulation runs against current state; the sandwich is constructed at broadcast time and lands in the same block as the agent's transaction.
+
+**What the policy engine can enforce:** txfence supports per-transaction MEV protection via `Policy.mevProtection`. Setting it to `'flashbots'` routes broadcasts through Flashbots Protect, which submits to builders directly and bypasses the public mempool. Setting it to `'mev-blocker'` routes through CoW Protocol's MEV Blocker. Both prevent the pending-transaction observation step that a sandwich attack depends on. The setting is per-transaction, so swaps can use Flashbots while internal transfers use the default path. EVM only; Solana and Cosmos adapters ignore the field.
+
+---
+
+## 10. Unauthorized approval execution
+
+**What happens:** A transaction exceeds the human approval threshold and the agent dispatches a webhook to a human approver. An attacker who can reach the polling endpoint sends a forged approval response. The agent treats the forged response as legitimate and executes a transaction that no human ever sanctioned.
+
+**Root cause:** Webhook channels are not inherently authenticated. Anyone with the polling URL and the approval token can post a decision. Without payload signing on the dispatch side and signature verification on the receive side, the approval system is a public message bus.
+
+**What simulation catches:** Nothing. The transaction simulates and would execute correctly; the question is who authorized it, not whether it would succeed.
+
+**What the policy engine can enforce:** `createWebhookApprovalProvider` signs every outbound webhook payload with HMAC-SHA256 using a shared secret. Receivers verify the `X-TXFence-Signature` header before trusting the payload. The poll endpoint uses a token that the agent generated, so an attacker without the secret cannot forge decisions even if they can guess the URL. Cancel-on-timeout is the hard default: if no valid approval arrives within the window, the transaction is dropped rather than silently executed. The default is not configurable to execute-on-timeout.
+
+---
+
+## 11. Audit trail tampering
+
+**What happens:** An attacker with write access to the audit log edits or removes historical entries to hide an unauthorized transaction. A compliance review afterward finds nothing wrong because the record was cleaned. The same problem applies in reverse: an attacker plants fake entries to discredit a legitimate operation.
+
+**Root cause:** Plain append-only logs are append-only by convention, not by cryptographic guarantee. A file system attacker can rewrite history. Write-once storage backends (S3 with object lock, WORM storage) help, but are not always practical, and they only protect against modification of past entries — not against an attacker who controls the system before a record is written.
+
+**What simulation catches:** Nothing. This is a post-execution evidence-integrity problem, not a transaction property.
+
+**What the policy engine can enforce:** `@txfence/provenance` extends the audit story with hash-chained records. Every authorization decision is linked to the SHA-256 hash of the previous record. Modifying any historical entry invalidates every record after it, and `chain.verify()` detects the violation and reports the specific `hash_mismatch`, `chain_broken`, or `invalid_hash` failure. Merkle proofs allow a compliance team to prove a specific record exists without exposing the rest of the chain. The CLI command `txfence provenance verify` exits non-zero on any integrity violation, so the integrity check can be wired into a scheduled job.
+
+---
+
+## 12. Behavioral pattern attacks
+
+**What happens:** An attacker who cannot exceed the per-transaction spend cap submits a steady stream of below-cap transactions. Over a window, the cumulative spend exhausts the agent's funds. Or: an attacker drives the agent into a sequence of failures to mask a later successful attack. Or: an attacker floods the approval channel to wear down the human approver. Each individual action passes every static check.
+
+**Root cause:** Per-transaction policy checks are stateless. They cannot detect patterns that emerge across many transactions. A cap on each spend says nothing about velocity across an hour. An allowlist says nothing about how often a contract is being called. A stateless policy is structurally blind to anything that requires correlating events.
+
+**What simulation catches:** Nothing. Each transaction simulates correctly. The pattern is across transactions, not within one.
+
+**What the policy engine can enforce:** `policy.temporalRules` evaluates six predicate kinds against an `EventStore` of recent pipeline outcomes. `spend_velocity` caps cumulative spend within a window. `simulation_failure_rate` triggers when simulations fail more than N times in a window. `contract_call_frequency` caps how often a specific contract may be called. `consecutive_failures` triggers when the last N events are all non-success. `success_drought` triggers when too few successes occur in a window (a stalled-agent signal). `approval_flood` triggers when too many approval timeouts accumulate. Each predicate has a consequence: reject, require approval, or flag for review. The pattern is caught without the agent itself needing to recognize it.
+
+---
+
+## 13. Multi-step intent partial failure
+
+**What happens:** An agent declares a sequence of related actions as a single intent: swap A to B, then approve, then stake. The swap succeeds, the approve is rejected. The agent now holds B but no staked position, with no clean continuation path. State is partially committed in a way the policy did not anticipate.
+
+**Root cause:** Treating each action as independent makes the failure surface of a multi-step operation invisible to the policy engine. A policy that approves each step individually has no way to express "all of these steps must succeed together" or "if step 2 fails, do not attempt step 3." Partial commitment is the default behavior of independently-checked actions.
+
+**What simulation catches:** Each step individually, against current state. Not the dependency relationships between steps. Not the state after step 1 has committed when step 2 would actually run. Fork simulation can address the latter when invoked at the intent level.
+
+**What the policy engine can enforce:** `agent.executeIntent()` declares a multi-step operation as a directed acyclic graph with explicit dependencies between steps. A failed step poisons every step that depends on it, so the agent never holds intermediate exposure with no continuation path. Position analysis tracks gross outflow, net change, and intermediate exposure across the whole intent before any signing happens. Fork simulation via Tenderly lets the entire graph be tested against current chain state in a single forked snapshot before commitment. The `IntentPolicy` adds constraints on total spend, max intermediate exposure, max steps, and total duration.
+
+---
+
+## 14. Policy configuration bug
+
+**What happens:** The policy is technically valid but operationally wrong. A cap is set too high. A rolling window is too generous. An approval threshold is below the per-tx cap, making every transaction require approval. A stricter "production" policy is missing a constraint that a more permissive "staging" policy contains. The agent enforces a policy that does what it says, not what was intended.
+
+**Root cause:** Policies are configuration. Configuration errors are silent. Type checks ensure a policy is structurally valid but say nothing about its operational behavior. A bug discovered in production is the worst place to discover it.
+
+**What simulation catches:** Nothing. Simulation tests transactions against the policy, not the policy against itself.
+
+**What the policy engine can enforce:** `@txfence/verify` performs bounded model checking on three properties of any policy before it ships. `absolute_cap_reachability` asks whether N agents executing M transactions could collectively reach the absolute cap. `rolling_window_saturation` asks whether N agents could saturate a rolling window cap through adversarial scheduling. `policy_containment` asks whether every action allowed by an inner policy is also allowed by an outer policy, which is the right way to verify a "production" policy is strictly tighter than a "staging" policy. Each check returns either "holds" with the verified bound or "violated" with a concrete counterexample showing exactly how the property can be broken. The companion `stressTest` function runs six adversarial attack vectors (rapid_fire, coordinated_drain, rpc_failure, stale_simulation, cap_boundary, approval_flood) against the policy and produces a risk report with per-vector failure rates and an actionable recommendation. Both have CLI commands (`txfence verify`, `txfence stress-test`) that exit non-zero on violations and can be wired into CI as gates on every policy change before it ships.
 
 ---
 

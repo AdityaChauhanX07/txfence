@@ -1,6 +1,6 @@
 # txfence
 
-![CI](https://github.com/AdityaChauhanX07/txfence/actions/workflows/ci.yml/badge.svg)
+[![npm](https://img.shields.io/npm/v/@txfence/core.svg)](https://www.npmjs.com/package/@txfence/core) ![CI](https://github.com/AdityaChauhanX07/txfence/actions/workflows/ci.yml/badge.svg)
 
 The fence between what an agent wants to do and what it does on-chain.
 

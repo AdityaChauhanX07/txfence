@@ -2,6 +2,8 @@
 
 Troubleshooting guide for txfence agents in production. Each section covers a specific error or rejection reason, what causes it, and what to check.
 
+Related reading: [docs/failure-taxonomy.md](failure-taxonomy.md) catalogues how autonomous agents fail and which failure modes txfence addresses. [docs/txfence-failure-taxonomy.md](txfence-failure-taxonomy.md) catalogues how txfence itself can fail. [docs/security-model.md](security-model.md) describes the threat model and protection boundaries.
+
 ---
 
 ## Policy rejections
@@ -177,6 +179,31 @@ Troubleshooting guide for txfence agents in production. Each section covers a sp
 
 ---
 
+### `temporal_rule_triggered`
+
+**What happened:** A temporal rule in `policy.temporalRules` fired against the sliding window of recent pipeline events. The action would have passed every static check, but a behavioral pattern across recent runs triggered automatic rejection.
+
+**What this means:** Temporal rules evaluate one of six predicate kinds against an `EventStore` of recent pipeline outcomes:
+- `spend_velocity` — cumulative spend within a window exceeded the configured maximum
+- `simulation_failure_rate` — too many simulations failed in the window (agent-scoped when `agentId` is set)
+- `contract_call_frequency` — a specific contract was called too many times in the window
+- `consecutive_failures` — the last N pipeline events were all non-success
+- `success_drought` — too few successful executions within the window
+- `approval_flood` — too many approval timeouts within the window
+
+**Check:**
+- Which predicate triggered? Look at the rule's `label` field if set, or inspect `policy.temporalRules` and correlate with the rejection details.
+- What is the agent's recent history? Query the `EventStore` for events in the relevant window.
+- Is the threshold appropriate for normal operation, or was it tuned for an attack scenario that is now hitting normal traffic?
+- Did upstream behavior change recently? A spike in legitimate traffic can trip a rule that was sized for quieter periods.
+
+**Fix:**
+- If the rule is correctly catching a real anomaly: investigate the root cause of the pattern (compromised key, runaway loop, prompt injection) before resuming.
+- If the rule is too tight: widen `windowMs`, raise the threshold, or change the consequence from `reject` to `require_approval` or `flag_for_review`.
+- For `consequence: 'require_approval'` rules: ensure an `ApprovalProvider` is configured, otherwise the rejection cascades into `approval_timeout`.
+
+---
+
 ## Simulation issues
 
 ### Simulation passes but execution fails
@@ -211,11 +238,35 @@ Troubleshooting guide for txfence agents in production. Each section covers a sp
 
 ---
 
+### Agent returns `simulation_stale`
+
+**What happened:** Simulation ran at one moment, but more than `policy.simulationStalenessMs` milliseconds passed before signing. The pipeline returns `{ status: 'simulation_stale', stalenessMs }` and refuses to sign with a stale simulation.
+
+**Why this happens:** Network latency, approval polling delays, slow executors, or a deliberate `simulationStalenessMs` set tighter than the path can guarantee.
+
+**Check:**
+- What is `result.stalenessMs`? This tells you exactly how far past the threshold the simulation drifted.
+- What is `policy.simulationStalenessMs`? Recommended values are 15,000 to 30,000 ms for volatile DeFi paths.
+- Is the approval step taking too long? Approval poll intervals add latency between simulation and signing.
+- Is the executor slow? Custom executors that batch or queue work add delay before the signing window.
+
+**Fix:**
+- The honest response is to re-simulate and re-submit. Implement retry logic in your agent that catches `simulation_stale`, calls the adapter again, and resubmits.
+- If staleness is firing on legitimate latency: raise `policy.simulationStalenessMs`. Going much above 30,000 ms defeats the purpose for volatile actions.
+- If you do not want a staleness check at all: remove `simulationStalenessMs` from the policy. Be explicit about accepting the divergence risk.
+
+---
+
 ## Approval issues
 
 ### Agent returns `approval_timeout`
 
-**What happened:** Either no `ApprovalProvider` was configured and the action exceeded `humanApprovalThreshold`, or the approval window expired without a decision.
+**What happened:** One of three things produces this result:
+1. No `ApprovalProvider` was configured and the action exceeded `humanApprovalThreshold`.
+2. The approval window expired without a decision.
+3. The approver explicitly rejected the request.
+
+The pipeline returns the same `approval_timeout` status for both timeout (no decision) and explicit rejection (decision was 'rejected'). The two are operationally distinct — one means the human did not respond, the other means the human said no — but they share a result type because the executor's job is the same in either case: do not sign.
 
 **Check:**
 - Is an `ApprovalProvider` configured on the agent?
@@ -228,6 +279,70 @@ Troubleshooting guide for txfence agents in production. Each section covers a sp
 - If the webhook is not being received: check the webhook URL, firewall rules, and receiver logs.
 - If the timeout is too short: increase `humanApprovalTimeoutMs`.
 - If the approver missed it: resubmit the action and ensure the approver is available.
+- If the approver explicitly rejected: the rejection is the intended outcome. Audit the action against the policy before considering a resubmit.
+
+---
+
+## Execution failures
+
+`ExecutionResult` returns `{ status: 'execution_failed', action, txHash, reason }` where `reason` is a typed `ExecutionFailureReason` discriminated union with four codes. Each code points to a different failure point in the signing-and-broadcast path.
+
+### `reason.code === 'no_executor'`
+
+**What happened:** The pipeline reached the execution stage but no `executor` callback was configured on the agent.
+
+**Check:**
+- Is the agent configured with an executor? `createAgent` accepts the executor as its fourth argument.
+- Is this a dry-run agent that intentionally has no executor? Some test deployments omit it on purpose.
+- Was the executor wiring removed in a recent deployment?
+
+**Fix:** Provide an executor when constructing the agent. The chain-specific helpers (`executeEvmAction`, `executeSolanaAction`, `executeCosmosAction`) are the standard implementations.
+
+---
+
+### `reason.code === 'executor_threw'`
+
+**What happened:** The executor callback was invoked and threw an error. `reason.message` contains the thrown error's message; `reason.cause` carries the original error object.
+
+**Check:**
+- What does `reason.message` say? This is usually the underlying RPC, signing library, or executor implementation error.
+- Did the transaction confirm despite the error? Compare against the audit log and on-chain state.
+- Is this a transient error (rate limit, timeout) or a structural one (insufficient balance, invalid parameters)?
+
+**Fix:**
+- For transient errors: implement retry logic in your executor with exponential backoff.
+- For structural errors: fix the action parameters or the underlying state before resubmitting.
+- For receipt-store errors after a successful execution: see the receipt-write entry in [docs/txfence-failure-taxonomy.md](txfence-failure-taxonomy.md). The transaction may have confirmed on-chain even though the result reports `executor_threw` with an empty `txHash`.
+
+---
+
+### `reason.code === 'signing_failed'`
+
+**What happened:** The executor reached the signing step but the signer rejected or threw. `reason.message` contains the signer's error.
+
+**Check:**
+- Is the signer configured correctly? `privateKeySigner` requires a `0x`-prefixed 32-byte hex string.
+- For HSM or KMS signers: is the credential still valid? Cloud KMS keys can be disabled or rotated.
+- Did the signing payload exceed any limit imposed by the signer (gas, nonce, chain ID mismatches)?
+
+**Fix:** Check the signer's logs for the actual error. Most signer failures are credential issues (expired token, missing permission) or payload issues (invalid chain ID, malformed transaction).
+
+---
+
+### `reason.code === 'broadcast_failed'`
+
+**What happened:** The transaction was signed but the broadcast call failed. `reason.message` carries the broadcast error. `reason.txHash` is the partial transaction hash if available — this is set when a tx hash was computed during signing even though broadcast failed afterward.
+
+**Check:**
+- Is the RPC endpoint reachable? Broadcast failures are often RPC connectivity issues.
+- Was the transaction broadcast successfully despite the error? Some providers return success status late; query the chain by `reason.txHash` (if set) to confirm.
+- Was there a nonce conflict? A transaction signed with a stale nonce will fail broadcast on most providers.
+- Is the gas price sufficient? Low-priority transactions can be rejected by some RPCs even before mempool entry.
+
+**Fix:**
+- If `reason.txHash` is set: poll the chain for that hash before resubmitting. The transaction may already have landed.
+- If broadcast failed cleanly: resubmit with a fresh simulation and current gas price.
+- For repeated broadcast failures: switch to a backup RPC endpoint or check the provider's status page.
 
 ---
 
@@ -315,3 +430,40 @@ Troubleshooting guide for txfence agents in production. Each section covers a sp
 **Cause:** Public RPC nodes rate-limit requests. Block scanning (fetching full blocks with transactions) is RPC-intensive. Under continuous polling, public nodes will throttle or reject requests.
 
 **Fix:** Use a dedicated RPC endpoint from Alchemy, Infura, or another provider. Set `maxBlocksPerPoll` to 1-2 on public nodes if a dedicated endpoint is not immediately available.
+
+---
+
+### `capLockMode: 'shared'` without a CapLockProvider configured
+
+**Symptom:** Multi-agent deployments race past each other on the shared cap. Spend amounts exceed `maxSpendPerTx × N` over a window even though `capLockMode` is set to `'shared'`.
+
+**Cause:** Setting `capLockMode: 'shared'` declares intent but does not provide enforcement. Without an actual `CapLockProvider` (memory for single-process, `@txfence/redis` for multi-process), no cap locking happens.
+
+**Fix:** Wire a `CapLockProvider` into `createAgent`'s fifth parameter. For multi-process deployments use `createRedisCapLockProvider` from `@txfence/redis` so the cap state is shared across agents.
+
+---
+
+### `requireSimulation: true` without an adapter for the chain
+
+**Symptom:** Every action is rejected with `simulation_required_but_failed` even though the action and policy look correct.
+
+**Cause:** `requireSimulation: true` demands a successful simulation, but if `adapters[action.chain]` is `undefined` the pipeline cannot simulate at all. The check fails on missing simulation, not on a real revert.
+
+**Fix:** Ensure the `adapters` argument to `createAgent` has an entry for every chain in `policy.chains`. For EVM, that means `{ ethereum: { simulate: simulateEvmAction } }` at minimum.
+
+---
+
+### Missing executor on a production agent
+
+**Symptom:** Every action returns `{ status: 'execution_failed', reason: { code: 'no_executor' } }`. Dry-run results look correct but live submissions never reach the chain.
+
+**Cause:** The `executor` callback (fourth argument to `createAgent`) was omitted during agent construction. txfence treats this as a hard structural error rather than a silent no-op.
+
+**Fix:** Pass an executor callback. For EVM agents the canonical wiring is:
+
+```typescript
+(action, chainId, rpcUrl, evaluation, simulation) =>
+  executeEvmAction(action, chainId, rpcUrl, signer, evaluation, simulation)
+```
+
+For Solana and Cosmos, swap in `executeSolanaAction` and `executeCosmosAction` respectively.

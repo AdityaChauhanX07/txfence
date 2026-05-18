@@ -34,7 +34,7 @@ The policy bounds are what actually protect you. A declared minimum output, a sl
 
 ---
 
-## The eight failure modes
+## The failure modes
 
 The failure taxonomy is published in full at `docs/failure-taxonomy.md`. What follows is the pattern behind each failure mode, not the detail. Read the taxonomy for the full breakdown of root causes, what simulation catches, and what the policy engine can enforce.
 
@@ -55,6 +55,8 @@ The failure taxonomy is published in full at `docs/failure-taxonomy.md`. What fo
 **Gas estimation failure.** A transaction runs out of gas mid-execution, reverts, and the fee is consumed. Gas estimation is a simulation-time calculation. If the execution path diverges from the simulated path, the estimate is wrong.
 
 Every one of these failures has happened to real teams. None of them require a bug in the agent. They require only that the world looked different at execution time than it did when the agent's instructions were written.
+
+The taxonomy has grown since these eight were first documented. Six additional failure modes are catalogued there now: MEV sandwich attack, unauthorized approval execution, audit trail tampering, behavioral pattern attacks, multi-step intent partial failure, and policy configuration bug. Each emerged from the same observation. Real production failures live in the gap between intent and execution, not in security or in logic.
 
 ---
 
@@ -102,6 +104,20 @@ Cross-chain intent replay. Chain scoping is enforced at the policy declaration l
 
 Execute-on-timeout. The cancel-on-timeout default is hard and not configurable in the other direction. A human approval window that expires without a response always results in a dropped transaction, never a silent execution.
 
+Spend cap race condition, when a cap-lock provider is configured. The two-phase acquire, commit, and release protocol makes multi-agent spend caps atomic. The in-memory provider handles single-process deployments. The Redis provider uses atomic Lua scripts for multi-process coordination, so two agents racing for the last of a shared cap cannot both succeed.
+
+Unauthorized approval execution. Webhook approval payloads are signed with HMAC-SHA256. A poll response without a valid signature is rejected. A polling window that expires never silently defaults to execute. Approval URLs are one-click but the underlying decision is verified on the server, not in the click.
+
+MEV sandwich attack, when MEV protection is enabled. Transactions can be routed through Flashbots Protect or MEV Blocker by setting a single policy field. Swaps bypass the public mempool entirely. Different action kinds in the same agent can use different protection levels: high-value swaps through Flashbots, internal transfers through the default path.
+
+Behavioral pattern attacks. Temporal rules evaluate sliding windows of pipeline events against six predicate kinds: spend velocity, simulation failure rate, contract call frequency, consecutive failures, success drought, and approval flood. Patterns that look benign in isolation but problematic over time trigger automatic rejection, approval requirement, or review flagging without the agent itself having to recognize the pattern.
+
+Multi-step intent partial failure. Intent-level execution treats a chain of related actions as a directed acyclic graph with explicit dependencies. A step failure poisons only the steps that depend on it. Position analysis tracks gross outflow, net change, and intermediate exposure across the whole intent before any signing happens. Fork simulation lets the entire graph be tested against current chain state in a single forked snapshot before commitment.
+
+Audit trail tampering. Provenance chains link every authorization decision to the SHA-256 hash of the previous one. Modifying any historical entry invalidates every record after it. Merkle proofs allow compact verification that a specific record exists without exposing the rest of the chain. A compliance team can detect tampering of an old record without any external trust.
+
+Policy configuration bug, before deployment. Bounded model checking proves three properties of any policy: absolute cap reachability, rolling window saturation, and policy containment. Each can produce a concrete counterexample when violated. Adversarial stress testing runs six attack vectors against the policy and produces a risk report with per-vector failure rates and recommendations. Both can be wired into CI to gate every policy change before it lands.
+
 **What txfence partially mitigates:**
 
 Simulation-execution divergence. txfence enforces output bounds that limit the damage when divergence occurs. It does not prevent divergence. No tool can prevent divergence. The policy bounds are what hold when the simulation's predictions turn out to be wrong.
@@ -114,34 +130,34 @@ Gas estimation failure. txfence enforces a minimum gas buffer multiplier and wil
 
 **What txfence does not protect against:**
 
-Spend cap race conditions in multi-agent environments where the cap locking interface is not used. The interface exists. Protection requires the builder to use it.
+Failure modes that occur entirely after a transaction is confirmed on-chain. The reconciliation monitor can detect unrecorded transactions and chain reorganizations post-hoc, and the audit and provenance layers preserve the full decision history for forensic analysis. txfence cannot reverse a confirmed transaction. Detection without prevention is still the limit at that layer.
 
-Any failure mode that occurs after a transaction is confirmed on-chain. txfence operates in the pre-signing and pre-broadcast window. Once a transaction is confirmed, it is outside txfence's scope.
+Protocol-level exploits against contracts on the allowlist that pass all metadata checks. txfence verifies that a contract is what it was when it was allowlisted, including bytecode hash, owner address, and expiry timestamp. It cannot verify that the contract's logic is safe. An audited contract with a zero-day vulnerability still presents as healthy on every observable property.
 
-Protocol-level exploits against contracts on the allowlist that pass all metadata checks. txfence verifies that a contract is what it was when it was allowlisted. It cannot verify that the contract's logic is safe.
+Failure modes that arise from a policy not being declared at all. If a builder does not pin bytecode hashes, the proxy-target protection does not apply. If they do not enable MEV protection, swaps go through the public mempool. The protection is opt-in by design, because forcing every team into every primitive would be the wrong call for the simpler use cases. The cost of that design is that protection requires configuration.
 
 The honest summary: txfence eliminates the failure modes that come from missing policy enforcement, and bounds the damage from the failure modes that come from chain state divergence. It does not make on-chain action risk-free. It makes the risks explicit, bounded, and auditable.
 
 ---
 
-## What we built and what comes next
+## What we built
 
-txfence is not finished. This essay is being published before the implementation is complete because the design decisions matter more than the code, and the design decisions are worth discussing publicly before they are locked in by implementation.
+This essay was first published before the implementation was complete, on the bet that the design decisions mattered more than the code. The design decisions held up. The implementation followed.
 
-What exists today:
+What exists today, organized by what each piece does.
 
-The failure taxonomy is published at `docs/failure-taxonomy.md`. It documents every known failure mode for autonomous agents transacting on-chain, with root causes, honest assessments of what simulation catches, and what the policy engine can enforce. It is a living document.
+The policy engine and orchestration layer live in `packages/core`. It is pure TypeScript with no chain dependencies, fully unit-testable in isolation. Every check from the failure taxonomy is implemented as a typed, composable rule. `Policy`, `Action`, `SimulationResult`, `ExecutionResult`, `SuccessReceipt`, and `PolicyEvaluation` are the primitives. The full discriminated union of execution outcomes forces builders to handle every result explicitly at compile time. Composite AND/OR policy trees, dry-run mode, intent-level DAG execution, temporal rules over event histories, multi-agent coordination with intent claiming and rate limiting, and a chain-agnostic registry of assets and protocols all live in the same package.
 
-The core type definitions are published at `packages/core/src/`. Every primitive txfence exposes has a type: `Policy`, `Action`, `SimulationResult`, `ExecutionResult`, `SuccessReceipt`, `PolicyEvaluation`. The full discriminated union of execution outcomes forces builders to handle every result explicitly at compile time. No silent failures.
+Three chain adapters cover the major ecosystems. `packages/evm` provides simulation via `eth_call` and Tenderly with explicit coverage semantics, fork simulation for multi-step intents, MEV protection via Flashbots and MEV Blocker, signing via viem, and contract metadata verification with bytecode hash pinning. It supports Ethereum, Arbitrum, Optimism, and Base. `packages/solana` provides `simulateTransaction` with honest account model semantics. `packages/cosmos` covers Cosmos Hub and Osmosis with Protobuf transaction handling.
 
-What is being built next:
+The infrastructure packages handle the boring but production-critical parts. `packages/redis` provides distributed cap locking with atomic Lua scripts for multi-process deployments. `packages/storage-pg` and `packages/storage-sqlite` provide pluggable `ReceiptStore` backends. `packages/audit` is an append-only audit log that records every pipeline decision, not only the successful ones. `packages/monitor` runs on-chain reconciliation, detecting transactions that landed without txfence recording them and chain reorganizations that invalidate previously-confirmed receipts.
 
-The policy engine implementation in `packages/core`. Pure TypeScript, no chain dependencies, fully unit-testable in isolation. Every check documented in the taxonomy implemented as a typed, composable rule.
+Two packages exist to prove the policy is correct before it ever runs. `packages/verify` performs bounded model checking on three properties of any policy, producing concrete counterexamples when violations exist. The same package runs adversarial stress tests across six attack vectors and produces a risk report with per-vector failure rates and actionable recommendations. `packages/provenance` makes the audit trail cryptographically tamper-evident. Every authorization decision is hash-chained to the previous one. Merkle proofs allow compact verification of individual records without exposing the rest of the chain.
 
-The EVM chain adapter in `packages/evm`. Simulation via `eth_call` and trace APIs, with explicit coverage semantics. Tenderly integration with documented caveats. Support for Ethereum mainnet, Arbitrum, Optimism, and Base.
+The integration surface covers the operator, the AI assistant, and the frontend. `packages/cli` exposes thirteen commands for simulation, policy checking, dry-run, diff, replay, intent submission, formal verification, stress testing, and provenance verification. `packages/mcp` runs an MCP server that exposes eleven tools to AI assistants. `packages/react` provides seven hooks for building frontends on top of txfence agents: `useAgent`, `useSubmit`, `useSimulate`, `useReceipt`, `useDryRun`, `useIntentSubmit`, and `useAgentHealth`.
 
-The Solana chain adapter in `packages/solana`. `simulateTransaction` with honest account model semantics. Compute budget handling, account locking edge cases, and recent blockhash expiry documented and handled explicitly.
+The full repository ships fourteen packages with more than 600 tests passing, CI green, zero type errors across all packages, and architecture decision records for every major design choice. The failure taxonomy is a living document. It has grown from eight failure modes to fourteen since this essay was first published.
 
-If you are building a financial agent on EVM or Solana and you have hit any of the failure modes in the taxonomy, or you have hit failure modes that are not in it, we want to hear from you. The taxonomy grows through real production experience. Open an issue on GitHub or reach out directly.
+If you are building a financial agent on EVM, Solana, or Cosmos and you have hit any of the failure modes in the taxonomy, or you have hit failure modes that are not in it, we want to hear from you. The taxonomy grows through real production experience. Open an issue on GitHub or reach out directly.
 
-The repository is at `github.com/adityachauhanX07/txfence`. The failure taxonomy and type definitions are there now. Everything else is being built in public.
+The repository is at `github.com/AdityaChauhanX07/txfence`. Active development continues in public.

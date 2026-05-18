@@ -1,5 +1,3 @@
----
-
 # txfence failure taxonomy
 
 This document covers how **txfence itself can fail** — infrastructure failures, race conditions, and edge cases in the SDK's own components. This is distinct from [docs/failure-taxonomy.md](failure-taxonomy.md), which covers how autonomous agents fail.
@@ -14,7 +12,7 @@ Teams deploying txfence with real funds should understand these failure modes be
 
 **Detection:** The `@txfence/monitor` package will eventually detect this as an unrecorded transaction. The monitor scans blocks for transactions from known agent addresses and checks them against the receipt store. A confirmed transaction with no receipt will trigger `onUnrecordedTransaction` with `severity: 'warning'`, escalating to `'critical'` after the grace period.
 
-**What txfence does:** The pipeline does not retry receipt writes. If `receiptStore.save()` throws, the error propagates. The transaction has already confirmed — there is nothing to roll back.
+**What txfence does:** The pipeline does not retry receipt writes, but it also does not let the error propagate cleanly. `receiptStore.save()` is called inside the executor's `try / catch` block. If it throws, the catch path converts the result to `{ status: 'execution_failed', txHash: '', reason: { code: 'executor_threw' } }` and the caller cannot distinguish this from a real executor failure. The transaction confirmed on-chain, but the real `txHash` is in the receipt that was thrown away, and the result reports `txHash: ''`. A secondary effect: the catch path also calls `capLockProvider.release()` for this run even though `commit()` already succeeded for the same lock, which briefly double-accounts the spend against the cap. This is a known SDK quirk. The transaction has already confirmed — there is nothing to roll back, but the result reporting is misleading.
 
 **Mitigation:**
 - Use a receipt store with durable storage (PostgreSQL, not file-based) for production
@@ -63,7 +61,7 @@ Teams deploying txfence with real funds should understand these failure modes be
 
 **What happens:** `auditLog.record()` is called after every pipeline decision. If the underlying write fails — disk full, permission error, file system error — the error propagates. The pipeline does not catch errors from audit log writes. If the audit log write happens after execution, the transaction has already confirmed with no audit record.
 
-**What txfence does:** Audit log writes are `await`ed in the pipeline but not wrapped in try/catch. A throwing audit log can cause the pipeline to throw after a successful execution.
+**What txfence does:** Audit log writes are `await`ed in the pipeline but not wrapped in try/catch. The record call runs *after* the inner pipeline has already computed its `ExecutionResult` — success, policy_rejected, simulation_failed, anything. If `auditLog.record()` throws at that point, the caller receives an exception instead of the result that was already produced. The pipeline outcome is silently discarded. This is the worst variant of audit failure: the chain may have moved, the cap lock may have committed, the receipt may have been stored, and the caller has no structured record of what happened or whether it succeeded.
 
 **Mitigation:**
 - Monitor disk usage on the machine running the file-based audit log
@@ -129,15 +127,51 @@ Teams deploying txfence with real funds should understand these failure modes be
 
 ---
 
+## 9. Provenance chain append fails
+
+**What happens:** A pipeline run completes and the optional `@txfence/provenance` chain's `append()` method throws — disk full, JSONL corruption, permission error, or an in-memory chain hitting some custom internal limit.
+
+**What txfence does:** Provenance recording is wrapped in an internal helper (`recordProvenance` in `pipeline.ts`) that catches the error, logs it to stderr as `[txfence] provenance recording failed:`, and swallows it. The pipeline continues and returns the actual `ExecutionResult` to the caller.
+
+**This failure mode is handled correctly.** The tradeoff is that a provenance gap can appear without surfacing as a pipeline error. Operators relying on provenance for compliance evidence should monitor stderr for the warning line, or wrap their provenance chain implementation to emit a structured event when `append()` fails.
+
+---
+
+## 10. Event store record fails
+
+**What happens:** The optional `EventStore` backing temporal rules throws from its `record()` method — for example, an in-memory store hitting a custom size limit, or a database-backed implementation losing its connection.
+
+**What txfence does:** Event recording is wrapped in `recordPipelineEvent` in `pipeline.ts` with a silent try/catch. The pipeline never crashes due to event recording.
+
+**This failure mode is handled correctly.** The side effect is that temporal rules dependent on the missed events evaluate against a thinner window for that period. If reliability of the event store is critical (for example, when temporal rules are the only line of defense against a behavioral attack), the operator should add their own observability around the underlying storage.
+
+---
+
+## 11. Notification provider throws
+
+**What happens:** A `NotificationProvider.notify()` call rejects — webhook unreachable, HMAC signing error, downstream service overloaded. txfence emits `policy_rejected`, `execution_success`, `execution_failed`, `approval_requested`, `approval_decision`, `cap_warning`, `monitor_unrecorded`, and `monitor_reorg` events at the relevant pipeline points.
+
+**What txfence does:** Every `notify()` call in the pipeline is invoked as `void notificationProvider?.notify({...})` — fire-and-forget, no `await`. A rejecting promise becomes an unhandled rejection in Node, which can crash the process under `--unhandled-rejections=strict` or surface as a warning in default mode. The pipeline itself does not block, fail, or change its result.
+
+**Mitigation:**
+- Wrap your `NotificationProvider` implementation's `notify()` in a try/catch that swallows or logs the error
+- For the built-in `createWebhookNotificationProvider`, expect intermittent failures under network partition and ensure your downstream webhook endpoint tolerates retries from your own infrastructure
+- Run the Node process with `--unhandled-rejections=warn` (the default) rather than `strict` until your providers are fully hardened
+
+---
+
 ## Summary
 
 | Failure mode | Txfence handles it? | Detection | Mitigation |
 |---|---|---|---|
-| Receipt write fails post-confirmation | No — error propagates | Monitor detects unrecorded tx | Retry wrapper, durable storage, monitor |
+| Receipt write fails post-confirmation | No — caught as `execution_failed` with empty `txHash` | Monitor detects unrecorded tx | Retry wrapper in executor, durable storage, monitor |
 | Redis down between acquire and commit | No — no distributed tx | Audit/cap reconciliation job | Redis persistence, reconciliation |
 | Webhook endpoint unreachable | No — error propagates | Application logs | Retry in custom provider |
-| Audit log write fails | No — error propagates | Application logs | Catch-and-log wrapper, durable storage |
+| Audit log write fails | No — error propagates, pipeline outcome discarded | Application logs | Catch-and-log wrapper, durable storage |
 | Checkpoint file corrupted | Partial — write-then-rename prevents partial writes | Monitor crash on startup | Periodic backups, database-backed store |
 | Concurrent file store writers | No — no file locking | Corrupted JSONL lines | Single writer, or PostgreSQL store |
-| RPC errors during simulation | Yes — returns simulation_failed | Pipeline result status | Backup RPC endpoints |
-| Simulation staleness | Yes — returns simulation_stale when configured | Pipeline result status | Set simulationStalenessMs, retry logic |
+| RPC errors during simulation | Yes — returns `simulation_failed` | Pipeline result status | Backup RPC endpoints |
+| Simulation staleness | Yes — returns `simulation_stale` when configured | Pipeline result status | Set `simulationStalenessMs`, retry logic |
+| Provenance append fails | Yes — caught, logged to stderr, swallowed | Stderr warning line | Wrap implementation to emit a structured event |
+| Event store record fails | Yes — silently swallowed | None inside txfence | Add observability around your storage layer |
+| Notification provider throws | Yes — fire-and-forget, doesn't block pipeline | Unhandled rejection in Node | Wrap `notify()` in try/catch inside the provider |
