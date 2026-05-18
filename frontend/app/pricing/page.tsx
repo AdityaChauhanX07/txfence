@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
 const openSourceFeatures = [
-  "MIT License — use it anywhere",
-  "Full access to all 14 packages",
-  "Self-hosted on your infrastructure",
-  "Community support via GitHub Issues",
-  "600+ tests, zero type errors",
   "EVM, Solana, and Cosmos adapters",
-  "MCP server for AI assistant integration",
-  "Complete audit log and monitor packages",
+  "Cap locking — two-phase, atomic, multi-agent safe",
+  "Formal verification + adversarial stress testing",
+  "Cryptographic provenance — hash-chained + Merkle proofs",
+  "Temporal rules — sliding-window behavioral detection",
+  "Intent execution (DAG) with partial-failure handling",
+  "MCP server + 7 React hooks + CLI",
+  "MIT licensed, self-hosted, 600+ tests, zero type errors",
 ];
 
 const enterpriseFeatures = [
@@ -135,13 +135,13 @@ export default function PricingPage() {
                 <Button
                   variant="outline"
                   size="md"
-                  href="mailto:quantitativefinance6@gmail.com?subject=txfence Enterprise"
+                  href="mailto:txfence@adityachauhan.dev?subject=txfence Enterprise"
                   className="w-full justify-center"
                 >
                   Contact Us
                 </Button>
                 <p style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--color-text-tertiary)", textAlign: "center", marginTop: "0.625rem" }}>
-                  Early access available
+                  Custom pricing · annual contracts
                 </p>
               </div>
             </Card>

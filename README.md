@@ -42,25 +42,24 @@ Read the failure taxonomy: [docs/failure-taxonomy.md](docs/failure-taxonomy.md)
 
 ```typescript
 import { createAgent } from '@txfence/core'
+import type { Policy } from '@txfence/core'
 import { simulateEvmAction, executeEvmAction, privateKeySigner } from '@txfence/evm'
 
 const signer = privateKeySigner(process.env.PRIVATE_KEY as `0x${string}`)
 
+const policy: Policy = {
+  chains:                 ['ethereum'],
+  maxSpendPerTx:          { token: 'USDC', amount: 1000n, decimals: 6 },
+  allowedContracts:       [{ address: '0xYOUR_CONTRACT', chain: 'ethereum' }],
+  requireSimulation:      true,
+  gasBufferMultiplier:    1.2,
+  humanApprovalThreshold: { token: 'USDC', amount: 10000n, decimals: 6 },
+  humanApprovalTimeoutMs: 30000,
+  capLockMode:            'per-agent',
+}
+
 const agent = createAgent(
-  {
-    chains: ['ethereum'],
-    policies: {
-      chains:                 ['ethereum'],
-      maxSpendPerTx:          { token: 'USDC', amount: 1000n, decimals: 6 },
-      allowedContracts:       [{ address: '0xYOUR_CONTRACT', chain: 'ethereum' }],
-      requireSimulation:      true,
-      gasBufferMultiplier:    1.2,
-      humanApprovalThreshold: { token: 'USDC', amount: 10000n, decimals: 6 },
-      humanApprovalTimeoutMs: 30000,
-      capLockMode:            'per-agent',
-    },
-    signer,
-  },
+  { chains: ['ethereum'], policies: policy, signer },
   { ethereum: { simulate: simulateEvmAction } },
   { ethereum: 'https://ethereum.publicnode.com' },
   (action, chainId, rpcUrl, evaluation, simulation) =>
@@ -74,7 +73,7 @@ const result = await agent.submit({
     token: { token: 'ETH', amount: 100000000000000000n, decimals: 18 },
     to:    '0xRECIPIENT',
   },
-  policy: agent.config.policies,
+  policy,
 })
 
 switch (result.status) {
@@ -564,7 +563,7 @@ packages/storage-pg    PostgreSQL receipt storage — 12 tests
 packages/storage-sqlite SQLite receipt storage — 12 tests
 packages/mcp           MCP server with 11 tools — 5 tests
 packages/cli           CLI with 13 commands — 8 tests
-packages/react         React hooks — 7 tests
+packages/react         React hooks — 14 tests
 packages/audit         append-only audit log — 20 tests
 packages/monitor       on-chain reconciliation monitor — 13 tests
 packages/verify        formal verification + adversarial stress testing — 18 tests
@@ -585,6 +584,14 @@ packages/integration   Anvil integration tests — 7 passing + 5 skipped
 - [x] Replay and backtesting against audit logs
 - [x] Policy versioning with SHA-256 stable identifiers
 - [x] Multi-agent coordination — intent claiming, priority, rate limiting
+- [x] Circuit breaker for RPC fault tolerance — three-state breaker with composable adapter wrapping
+- [x] Agent graceful shutdown — drain in-flight submissions + `health()` snapshot for Kubernetes probes
+- [x] Telemetry provider — OpenTelemetry-compatible spans across all pipeline stages
+- [x] Config validation — domain-aware checks (decimal mismatches, missing chains, mis-ordered thresholds)
+- [x] Simulation staleness protection — rejects simulations older than the policy's threshold
+- [x] Cap lock inspection — operational observability over outstanding locks
+- [x] `ExecutionFailureReason` discriminated union — typed failure codes for executor / signing / broadcast
+- [x] Property-based tests for the policy engine — fast-check, 1800 random iterations
 - [x] EVM chain adapter with Tenderly simulation
 - [x] Solana chain adapter
 - [x] Cosmos chain adapter (Cosmos Hub, Osmosis)

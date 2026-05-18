@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Nav } from "@/components/homepage/nav";
+import NetworkBackground from "@/components/playground/NetworkBackground";
 
 type ChainId = "ethereum" | "arbitrum" | "optimism" | "base" | "solana" | "cosmoshub" | "osmosis";
 type Token = "ETH" | "USDC" | "USDT" | "SOL" | "ATOM" | "OSMO";
@@ -232,6 +233,7 @@ export default function PlaygroundPage() {
   return (
     <>
       <Nav />
+      <NetworkBackground />
       <main data-animate style={{ minHeight: "100vh", padding: "7rem 1.5rem 4rem", background: "var(--color-bg-primary)", "--stagger": 1 } as React.CSSProperties}>
         <style>{`
           .pg-label { display: block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-tertiary); margin-bottom: 0.375rem; }
@@ -246,7 +248,7 @@ export default function PlaygroundPage() {
           @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         `}</style>
 
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 900, margin: "0 auto" }}>
           <div style={{ marginBottom: "2.5rem" }}>
             <h1 style={{ fontFamily: "var(--font-sans)", fontSize: "1.5rem", fontWeight: 600, color: "var(--color-text-primary)", marginBottom: "0.375rem" }}>
               Playground
