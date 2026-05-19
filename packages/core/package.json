@@ -1,6 +1,6 @@
 {
   "name": "@txfence/core",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,7 +14,11 @@
       "types": "./src/contracts/index.ts"
     }
   },
-  "files": ["dist", "README.md", "CHANGELOG.md"],
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "build": "tsup",
     "prepublishOnly": "pnpm run build",
