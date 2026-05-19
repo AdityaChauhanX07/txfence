@@ -14,11 +14,7 @@
       "types": "./src/contracts/index.ts"
     }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "CHANGELOG.md"],
   "scripts": {
     "build": "tsup",
     "prepublishOnly": "pnpm run build",

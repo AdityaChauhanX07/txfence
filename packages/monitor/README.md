@@ -111,3 +111,8 @@ process.on('SIGTERM', () => monitor.stop())
 
 - **EVM only in v1.** Solana and Cosmos monitoring is planned for a future release.
 - **No gap detection on first run.** On first start with no checkpoint, the monitor begins from the current block. Transactions that occurred before the monitor was started are not retroactively checked. Initialize the checkpoint store with a historical start block if you need coverage from a specific point.
+
+---
+
+Full project README: https://github.com/AdityaChauhanX07/txfence
+

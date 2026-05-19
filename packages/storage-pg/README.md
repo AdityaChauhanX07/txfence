@@ -1,6 +1,6 @@
 # @txfence/storage-pg
 
-PostgreSQL receipt storage backend for [txfence](https://github.com/AdityaChauhanX/txfence).
+PostgreSQL receipt storage backend for [txfence](https://github.com/AdityaChauhanX07/txfence).
 
 ## Installation
 

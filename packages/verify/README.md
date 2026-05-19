@@ -25,3 +25,8 @@ within the bound may still be violated outside it. Always document the bounds
 you checked.
 
 Future: Z3 SMT backend for complete proofs (--solver z3 flag, planned).
+
+---
+
+Full project README: https://github.com/AdityaChauhanX07/txfence
+

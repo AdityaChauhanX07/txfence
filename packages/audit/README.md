@@ -1,6 +1,6 @@
 # @txfence/audit
 
-Append-only audit log for [txfence](https://github.com/AdityaChauhanX/txfence) agent decisions. Captures every policy evaluation, simulation, approval request, and execution outcome — including rejections that never reach the chain.
+Append-only audit log for [txfence](https://github.com/AdityaChauhanX07/txfence) agent decisions. Captures every policy evaluation, simulation, approval request, and execution outcome — including rejections that never reach the chain.
 
 ## Why audit vs. receipt storage?
 

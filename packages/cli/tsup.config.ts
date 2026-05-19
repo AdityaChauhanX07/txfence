@@ -5,7 +5,7 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   clean: true,
-  sourcemap: true,
+  sourcemap: false,
   splitting: false,
   banner: {
     js: '#!/usr/bin/env node',

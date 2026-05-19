@@ -57,3 +57,8 @@ a record exists without revealing all other records.
 The chain file must be stored on tamper-evident infrastructure (S3 with
 object lock, WORM storage) for strict compliance requirements.
 The hash chain detects tampering but does not prevent it on a writable filesystem.
+
+---
+
+Full project README: https://github.com/AdityaChauhanX07/txfence
+

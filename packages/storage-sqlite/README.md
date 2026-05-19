@@ -1,6 +1,6 @@
 # @txfence/storage-sqlite
 
-SQLite receipt storage backend for [txfence](https://github.com/AdityaChauhanX/txfence). Ideal for local development and single-process staging environments — no database server required.
+SQLite receipt storage backend for [txfence](https://github.com/AdityaChauhanX07/txfence). Ideal for local development and single-process staging environments — no database server required.
 
 ## Installation
 

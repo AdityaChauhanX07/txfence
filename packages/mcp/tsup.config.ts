@@ -6,14 +6,14 @@ export default defineConfig([
     format: ['esm'],
     dts: true,
     clean: true,
-    sourcemap: true,
+    sourcemap: false,
     splitting: false,
   },
   {
     entry: { bin: 'src/bin.ts' },
     format: ['esm'],
     dts: false,
-    sourcemap: true,
+    sourcemap: false,
     splitting: false,
     banner: {
       js: '#!/usr/bin/env node',
