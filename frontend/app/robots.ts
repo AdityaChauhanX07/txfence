@@ -8,6 +8,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://txfence.dev/sitemap.xml",
+    sitemap: "https://txfence.vercel.app/sitemap.xml",
   };
 }

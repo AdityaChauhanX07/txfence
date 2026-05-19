@@ -33,10 +33,10 @@ export const metadata: Metadata = {
     title: "txfence — The Policy Layer for Autonomous Agents",
     description:
       "txfence is the policy enforcement layer for AI agents. Define rules, enforce limits, and audit every action your agents take — before they hit production.",
-    url: "https://txfence.dev",
+    url: "https://txfence.vercel.app",
     siteName: "txfence",
     type: "website",
-    images: [{ url: "https://txfence.dev/og-image.png", width: 1200, height: 630 }],
+    images: [{ url: "https://txfence.vercel.app/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     description:
       "txfence is the policy enforcement layer for AI agents. Define rules, enforce limits, and audit every action your agents take — before they hit production.",
     creator: "@txfence",
-    images: ["https://txfence.dev/og-image.png"],
+    images: ["https://txfence.vercel.app/og-image.png"],
   },
 };
 
