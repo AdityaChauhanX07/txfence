@@ -29,12 +29,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@txfence/audit": "workspace:*",
-    "@txfence/core": "workspace:*",
-    "@txfence/evm": "workspace:*",
-    "@txfence/mcp": "workspace:*",
-    "@txfence/provenance": "workspace:*",
-    "@txfence/verify": "workspace:*",
+    "@txfence/audit": "0.1.2",
+    "@txfence/core": "0.1.2",
+    "@txfence/evm": "0.1.2",
+    "@txfence/mcp": "0.1.2",
+    "@txfence/provenance": "0.1.2",
+    "@txfence/verify": "0.1.2",
     "commander": "^12.0.0",
     "tsx": "^4.0.0",
     "viem": "^2.48.8"

@@ -24,11 +24,11 @@ importers:
   examples:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../packages/core
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/evm':
-        specifier: workspace:*
-        version: link:../packages/evm
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)(zod@4.4.3)
     devDependencies:
       tsx:
         specifier: ^4.0.0
@@ -37,17 +37,17 @@ importers:
   examples/treasury-agent:
     dependencies:
       '@txfence/audit':
-        specifier: workspace:*
-        version: link:../../packages/audit
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../../packages/core
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/evm':
-        specifier: workspace:*
-        version: link:../../packages/evm
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)(zod@4.4.3)
       '@txfence/monitor':
-        specifier: workspace:*
-        version: link:../../packages/monitor
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)(zod@4.4.3)
     devDependencies:
       tsx:
         specifier: ^4.0.0
@@ -56,8 +56,8 @@ importers:
   packages/audit:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -72,23 +72,23 @@ importers:
   packages/cli:
     dependencies:
       '@txfence/audit':
-        specifier: workspace:*
-        version: link:../audit
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/evm':
-        specifier: workspace:*
-        version: link:../evm
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)(zod@3.25.76)
       '@txfence/mcp':
-        specifier: workspace:*
-        version: link:../mcp
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)
       '@txfence/provenance':
-        specifier: workspace:*
-        version: link:../provenance
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/verify':
-        specifier: workspace:*
-        version: link:../verify
+        specifier: 0.1.2
+        version: 0.1.2
       commander:
         specifier: ^12.0.0
         version: 12.1.0
@@ -97,7 +97,7 @@ importers:
         version: 4.21.0
       viem:
         specifier: ^2.48.8
-        version: 2.48.8(typescript@6.0.3)(zod@4.4.3)
+        version: 2.48.8(typescript@6.0.3)(zod@3.25.76)
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -130,8 +130,8 @@ importers:
         specifier: ^0.32.0
         version: 0.32.4
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
     devDependencies:
       tsup:
         specifier: ^8.0.0
@@ -143,8 +143,8 @@ importers:
   packages/evm:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
       viem:
         specifier: ^2.48.8
         version: 2.48.8(typescript@6.0.3)(zod@4.4.3)
@@ -159,11 +159,11 @@ importers:
   packages/integration:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/evm':
-        specifier: workspace:*
-        version: link:../evm
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)(zod@4.4.3)
     devDependencies:
       vitest:
         specifier: ^4.1.5
@@ -175,14 +175,14 @@ importers:
         specifier: ^1.29.0
         version: 1.29.0(zod@3.25.76)
       '@txfence/audit':
-        specifier: workspace:*
-        version: link:../audit
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/evm':
-        specifier: workspace:*
-        version: link:../evm
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)(zod@3.25.76)
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -203,11 +203,11 @@ importers:
   packages/monitor:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
       '@txfence/evm':
-        specifier: workspace:*
-        version: link:../evm
+        specifier: 0.1.2
+        version: 0.1.2(typescript@6.0.3)(zod@4.4.3)
       viem:
         specifier: ^2.48.8
         version: 2.48.8(typescript@6.0.3)(zod@4.4.3)
@@ -225,8 +225,8 @@ importers:
   packages/provenance:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -241,8 +241,8 @@ importers:
   packages/react:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
     devDependencies:
       '@testing-library/react':
         specifier: ^14.0.0
@@ -269,8 +269,8 @@ importers:
   packages/redis:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
       ioredis:
         specifier: ^5.3.2
         version: 5.10.1
@@ -287,8 +287,8 @@ importers:
         specifier: ^6.8.0
         version: 6.8.0(typescript@6.0.3)
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
     devDependencies:
       vitest:
         specifier: ^4.1.5
@@ -297,8 +297,8 @@ importers:
   packages/storage-pg:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
       pg:
         specifier: ^8.11.0
         version: 8.20.0
@@ -316,8 +316,8 @@ importers:
   packages/storage-sqlite:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
       better-sqlite3:
         specifier: ^9.4.3
         version: 9.6.0
@@ -335,8 +335,8 @@ importers:
   packages/verify:
     dependencies:
       '@txfence/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: 0.1.2
+        version: 0.1.2
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -1392,6 +1392,28 @@ packages:
     peerDependencies:
       react: ^18.0.0
       react-dom: ^18.0.0
+
+  '@txfence/audit@0.1.2':
+    resolution: {integrity: sha512-p1w4f49pa1Zn8HRR+jv0ypY2Ac5xCiZNlYAO84RjIl8oReBWg6Ocw5eV9hvoJ4rEtkSuGj/gI6oJlmqtqapAbA==}
+
+  '@txfence/core@0.1.2':
+    resolution: {integrity: sha512-bDkm8Q56H7+0/bU3zhi+eDYtoU1FteDAm7STX5Lz1jurW9cUTBEY0yOcOLb5/kkI0lu4zf/80AHfY9XCyNI78w==}
+
+  '@txfence/evm@0.1.2':
+    resolution: {integrity: sha512-XKBt06Jh0pKqCxh8t2ju2OrnKsYlxCLuGrEt/abzxUgQ0+5ooOzTDi+NrCoCf18HozYq+Zm2P1kCWH5YGpmPsA==}
+
+  '@txfence/mcp@0.1.2':
+    resolution: {integrity: sha512-ugZZz53RVABEdep1glT9lbVWEkodwiNpah3gmNRiyp7PW5+3Byc+5g82ecMP4465nLNx+7TCz/6/LZl/AABLZw==}
+    hasBin: true
+
+  '@txfence/monitor@0.1.2':
+    resolution: {integrity: sha512-K9hRXcSu6fuM5LTk6lG4IZuU1X4HTcyfKOYD38lAAhD2hHAsnenagZKFvCn7tuE0o4zj7J7WAp45tdl0WA6edQ==}
+
+  '@txfence/provenance@0.1.2':
+    resolution: {integrity: sha512-77mg49UoCzzbvqB+Coqn8xW9ykxB6Q5XSI9kIqf208SW0ApOm6c0pTX4jCYzmTRK+4J1cKhbXhgRQIPxNjRT8g==}
+
+  '@txfence/verify@0.1.2':
+    resolution: {integrity: sha512-3Vt6e/bAGoevY+WFoaMNzrJ4oyNCKlAHbfvGJ546vUchYFQE1seVcfBfMUy/u3BxQDQkAKs1uZ09hB5Sg9qh2g==}
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -4376,6 +4398,67 @@ snapshots:
       react-dom: 18.3.1(react@18.3.1)
     transitivePeerDependencies:
       - '@types/react'
+
+  '@txfence/audit@0.1.2':
+    dependencies:
+      '@txfence/core': 0.1.2
+
+  '@txfence/core@0.1.2': {}
+
+  '@txfence/evm@0.1.2(typescript@6.0.3)(zod@3.25.76)':
+    dependencies:
+      '@txfence/core': 0.1.2
+      viem: 2.48.8(typescript@6.0.3)(zod@3.25.76)
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
+      - zod
+
+  '@txfence/evm@0.1.2(typescript@6.0.3)(zod@4.4.3)':
+    dependencies:
+      '@txfence/core': 0.1.2
+      viem: 2.48.8(typescript@6.0.3)(zod@4.4.3)
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
+      - zod
+
+  '@txfence/mcp@0.1.2(typescript@6.0.3)':
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@txfence/audit': 0.1.2
+      '@txfence/core': 0.1.2
+      '@txfence/evm': 0.1.2(typescript@6.0.3)(zod@3.25.76)
+      tsx: 4.21.0
+      viem: 2.48.8(typescript@6.0.3)(zod@3.25.76)
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - bufferutil
+      - supports-color
+      - typescript
+      - utf-8-validate
+
+  '@txfence/monitor@0.1.2(typescript@6.0.3)(zod@4.4.3)':
+    dependencies:
+      '@txfence/core': 0.1.2
+      '@txfence/evm': 0.1.2(typescript@6.0.3)(zod@4.4.3)
+      viem: 2.48.8(typescript@6.0.3)(zod@4.4.3)
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
+      - zod
+
+  '@txfence/provenance@0.1.2':
+    dependencies:
+      '@txfence/core': 0.1.2
+
+  '@txfence/verify@0.1.2':
+    dependencies:
+      '@txfence/core': 0.1.2
 
   '@tybys/wasm-util@0.10.1':
     dependencies:

@@ -4,10 +4,10 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@txfence/core": "workspace:*",
-    "@txfence/evm": "workspace:*",
-    "@txfence/audit": "workspace:*",
-    "@txfence/monitor": "workspace:*"
+    "@txfence/core": "0.1.2",
+    "@txfence/evm": "0.1.2",
+    "@txfence/audit": "0.1.2",
+    "@txfence/monitor": "0.1.2"
   },
   "devDependencies": {
     "tsx": "^4.0.0"

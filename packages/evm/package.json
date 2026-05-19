@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "viem": "^2.48.8",
-    "@txfence/core": "workspace:*"
+    "@txfence/core": "0.1.2"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -30,9 +30,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@txfence/audit": "workspace:*",
-    "@txfence/core": "workspace:*",
-    "@txfence/evm": "workspace:*",
+    "@txfence/audit": "0.1.2",
+    "@txfence/core": "0.1.2",
+    "@txfence/evm": "0.1.2",
     "tsx": "^4.21.0",
     "viem": "^2.48.8",
     "zod": "^3.25.76"

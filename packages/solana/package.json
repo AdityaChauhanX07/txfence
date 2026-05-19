@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@solana/kit": "^6.8.0",
-    "@txfence/core": "workspace:*"
+    "@txfence/core": "0.1.2"
   },
   "devDependencies": {
     "vitest": "^4.1.5"
