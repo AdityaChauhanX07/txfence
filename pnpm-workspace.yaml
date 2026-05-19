@@ -10,3 +10,4 @@ packages:
   - "examples"
   - "examples/treasury-agent"
   - "packages/scripts"
+  - "frontend"
