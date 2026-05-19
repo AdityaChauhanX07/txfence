@@ -1,0 +1,10 @@
+<svg width="240" height="60" viewBox="0 0 240 60" xmlns="http://www.w3.org/2000/svg" aria-label="txfence logo">
+  <svg x="16" y="14.0" width="49.77777777777778" height="32.0" viewBox="0 0 28 18" preserveAspectRatio="xMidYMid meet">
+    <rect x="5"  y="1" width="2"  height="16" rx="1" fill="#e8e8e8"/>
+    <rect x="1"  y="1" width="10" height="2"  rx="1" fill="#e8e8e8"/>
+    <rect x="18" y="1" width="2"  height="16" rx="1" fill="#e8e8e8"/>
+    <rect x="18" y="1" width="8"  height="2"  rx="1" fill="#e8e8e8"/>
+    <rect x="14" y="9" width="12" height="2"  rx="1" fill="#e8e8e8"/>
+  </svg>
+  <text x="73.77777777777777" y="30" dominant-baseline="central" font-family="'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace" font-weight="500" font-size="23" fill="#e8e8e8">txfence</text>
+</svg>

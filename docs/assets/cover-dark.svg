@@ -1,0 +1,11 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg" aria-label="txfence">
+  <rect width="1920" height="1080" fill="#080808"/>
+  <svg x="694.54" y="485" width="171.11" height="110" viewBox="0 0 28 18" preserveAspectRatio="xMidYMid meet">
+    <rect x="5"  y="1" width="2"  height="16" rx="1" fill="#e8e8e8"/>
+    <rect x="1"  y="1" width="10" height="2"  rx="1" fill="#e8e8e8"/>
+    <rect x="18" y="1" width="2"  height="16" rx="1" fill="#e8e8e8"/>
+    <rect x="18" y="1" width="8"  height="2"  rx="1" fill="#e8e8e8"/>
+    <rect x="14" y="9" width="12" height="2"  rx="1" fill="#e8e8e8"/>
+  </svg>
+  <text x="893.66" y="540" dominant-baseline="central" font-family="'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace" font-weight="500" font-size="79" fill="#e8e8e8">txfence</text>
+</svg>
