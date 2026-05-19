@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/cover.svg" alt="txfence — The fence between what an agent wants to do and what it does on-chain" width="100%">
+  <img src="docs/assets/cover-github.png" alt="txfence" width="680">
 </div>
 
 <br>
