@@ -1,6 +1,8 @@
 {
   "name": "@txfence/core",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "Policy engine and agent orchestration for txfence. Cap locking, receipt storage, webhook approval, temporal rules, intent execution, and chain-agnostic policy expressions.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

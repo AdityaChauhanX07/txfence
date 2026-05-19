@@ -1,6 +1,8 @@
 {
   "name": "@txfence/monitor",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "On-chain reconciliation monitor for txfence. Detects unrecorded transactions and chain reorganizations by scanning blocks for known agent addresses.",
   "type": "module",
   "private": false,
   "main": "./dist/index.js",
@@ -23,8 +25,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@txfence/core": "workspace:*",
-    "@txfence/evm": "workspace:*",
+    "@txfence/core": "0.1.2",
+    "@txfence/evm": "0.1.2",
     "viem": "^2.48.8"
   },
   "devDependencies": {

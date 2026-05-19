@@ -1,6 +1,8 @@
 {
   "name": "@txfence/provenance",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "Cryptographic provenance chains for txfence. Hash-chained records with Merkle proofs for tamper-evident transaction audit trails.",
   "type": "module",
   "private": false,
   "main": "./dist/index.js",

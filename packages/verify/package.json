@@ -1,6 +1,8 @@
 {
   "name": "@txfence/verify",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "Formal policy verification for txfence. Bounded model checking with counterexample generation and adversarial stress testing across six attack vectors.",
   "type": "module",
   "private": false,
   "main": "./dist/index.js",

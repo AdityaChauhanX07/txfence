@@ -1,6 +1,8 @@
 {
   "name": "@txfence/evm",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "EVM chain adapter for txfence. Simulation via eth_call and Tenderly, fork simulation, MEV-protected broadcast, signing for Ethereum, Arbitrum, Optimism, and Base.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,6 +1,8 @@
 {
   "name": "@txfence/storage-sqlite",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "SQLite receipt storage backend for txfence. No database server required — ideal for local development and single-process environments.",
   "type": "module",
   "private": false,
   "main": "./dist/index.js",

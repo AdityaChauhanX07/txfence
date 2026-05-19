@@ -1,6 +1,8 @@
 {
   "name": "@txfence/redis",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "Redis-backed cap lock provider for txfence. Drop-in replacement for the memory provider when multiple agents share spending caps across processes.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

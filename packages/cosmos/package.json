@@ -1,6 +1,8 @@
 {
   "name": "@txfence/cosmos",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "Cosmos chain adapter for txfence. Simulation, transaction building, signing, and broadcast for Cosmos Hub, Osmosis, and CosmJS-compatible chains.",
   "type": "module",
   "private": false,
   "main": "./dist/index.js",

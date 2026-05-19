@@ -1,6 +1,6 @@
 # txfence
 
-[![npm](https://img.shields.io/npm/v/@txfence/core.svg)](https://www.npmjs.com/package/@txfence/core) [![Version](https://img.shields.io/github/v/release/AdityaChauhanX07/txfence.svg)](https://github.com/AdityaChauhanX07/txfence/releases) ![CI](https://github.com/AdityaChauhanX07/txfence/actions/workflows/ci.yml/badge.svg) [![License: MIT](https://img.shields.io/github/license/AdityaChauhanX07/txfence.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/@txfence/core.svg)](https://www.npmjs.com/package/@txfence/core) ![CI](https://github.com/AdityaChauhanX07/txfence/actions/workflows/ci.yml/badge.svg) [![License: MIT](https://img.shields.io/github/license/AdityaChauhanX07/txfence.svg)](LICENSE)
 
 The fence between what an agent wants to do and what it does on-chain.
 

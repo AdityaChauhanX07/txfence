@@ -1,6 +1,8 @@
 {
   "name": "@txfence/react",
-  "version": "0.1.0",
+  "version": "0.1.2",
+  "license": "MIT",
+  "description": "React hooks for txfence. Build operator UIs and approval dashboards on top of a txfence agent without re-implementing pipeline state machine logic.",
   "type": "module",
   "private": false,
   "main": "./dist/index.js",
